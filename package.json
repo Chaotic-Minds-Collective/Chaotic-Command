@@ -1,3 +1,12 @@
 {
-  "type": "module"
+  "name": "chaotic-command",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env apps/command/server.mjs",
+    "dev": "node --watch --env-file-if-exists=.env apps/command/server.mjs",
+    "test": "node --test apps/command/test/*.test.mjs",
+    "check": "node --check apps/command/server.mjs && node --check apps/command/core.mjs && node --check apps/command/web/app.js"
+  }
 }
