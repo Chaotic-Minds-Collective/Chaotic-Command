@@ -8,7 +8,7 @@ import { HttpError, templates, hasPermission, canManage, validateId, makePlan, a
 
 const here = dirname(fileURLToPath(import.meta.url));
 const random = () => randomBytes(32).toString('hex');
-const equal = (a, b) => typeof a === 'string' && typeof b === 'string' && a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
+const equal = (a, b) => typeof a === 'string' && typeof b === 'string' && Buffer.byteLength(a) === Buffer.byteLength(b) && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 const HOUR = 3600000;
 
 /** Dependency-free single-process runtime. Inject fetch/db config for offline integration tests. */
@@ -121,7 +121,7 @@ export function createApp(config = {}) {
       }
       if (req.method === 'GET' && path === '/api/health') return json(res, 200, { ok: true, configured });
       if (req.method === 'GET' && path === '/api/session') {
-        return json(res, 200, { configured, user: session?.tokenExpires > Date.now() ? session.user : null, csrf: session?.csrf || null });
+        return json(res, 200, { configured, user: session?.tokenExpires > Date.now() ? session.user : null, csrf: session?.csrf || null, inviteBase: configured ? `https://discord.com/oauth2/authorize?${new URLSearchParams({ client_id: env.DISCORD_CLIENT_ID, scope: 'bot', permissions: '268435472' })}` : null });
       }
       if (req.method === 'GET' && path === '/auth/discord') {
         ensureConfigured();
@@ -189,6 +189,10 @@ export function createApp(config = {}) {
       }
       if (action === 'apply') {
         const result = await lock(id, async () => {
+          // Reload the authoritative session inside the lock; a queued body may carry stale state.
+          const stored = db.prepare('SELECT data FROM sessions WHERE id = ? AND expires > ?').get(sessionKey(sid), Date.now());
+          if (!stored) throw new HttpError(401, 'Session expired. Sign in again.');
+          session = decrypt(stored.data);
           const pending = session.preview;
           if (!pending || pending.id !== id || pending.expires < Date.now() || !equal(data.nonce, pending.nonce) || data.confirm !== `APPLY ${id}`) throw new HttpError(409, 'Preview expired or confirmation does not match. Preview again.');
           delete session.preview; persist();

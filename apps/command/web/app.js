@@ -33,9 +33,6 @@ async function loadGuilds() {
 async function loadServer() {
   clearPlan(); selected = $('guild').value; $('notes').value = ''; $('status').textContent = ''; $('invite').removeAttribute('href');
   if (!selected) { message('Choose a server.'); return; }
-  // This URL is safe to expose: it contains the public application ID, never a bot secret.
-  const params = new URLSearchParams({ client_id: window.commandClientId || '', scope: 'bot' });
-  void params;
   const notes = await api(`/api/guilds/${selected}/notes`); $('notes').value = notes.notes;
   try {
     const status = await api(`/api/guilds/${selected}/status`);
