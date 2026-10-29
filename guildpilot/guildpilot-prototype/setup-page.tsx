@@ -4,7 +4,7 @@ import { PageHead } from './layout.js';
 import styles from './app.module.css';
 
 /**
- * Server setup wizard — pick a template, preview the structure, and deploy it.
+ * Server setup wizard — choose a template and preview the proposed structure before connecting Discord.
  */
 export function SetupPage() {
   const [selected, setSelected] = useState(templates[0].id);
@@ -23,7 +23,7 @@ export function SetupPage() {
 
   return (
     <>
-      <PageHead title="Server Setup" subtitle="Build a complete server from a proven template in one click." />
+      <PageHead title="Server Setup" subtitle="Preview a server structure before connecting Discord and applying changes." />
       <div className={styles.grid}>
         {templates.map((t) => (
           <div key={t.id} role="button" tabIndex={0} onClick={() => { setSelected(t.id); setProgress(null); }}
@@ -52,11 +52,11 @@ export function SetupPage() {
           <h3 style={{ marginTop: '1.2rem' }}>Included systems</h3>
           <div className={styles.chips}>{tpl.features.map((f) => <span key={f} className={styles.chip}>✓ {f}</span>)}</div>
           <div style={{ marginTop: '1.5rem' }}>
-            {progress === null && <button className={styles.btn} onClick={deploy}>Apply to server</button>}
+            {progress === null && <button className={styles.btn} onClick={deploy}>Preview setup</button>}
             {progress !== null && (
               <>
                 <div className={styles.progress}><div className={styles.progressBar} style={{ width: `${progress}%` }} /></div>
-                <p className={styles.muted}>{progress < 100 ? `Creating channels, roles and permissions… ${progress}%` : '✅ Server set up! Tickets, AutoMod and welcome message are live.'}</p>
+                <p className={styles.muted}>{progress < 100 ? `Simulating a setup preview… ${progress}%` : 'Preview complete. No changes have been made to Discord.'}</p>
               </>
             )}
           </div>
