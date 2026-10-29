@@ -1,0 +1,48 @@
+---
+description: "A dropdown menu with a trigger, icon items, danger items, dividers and full keyboard navigation."
+labels: ["dropdown", "menu", "overlay"]
+---
+
+A themed dropdown menu. It supports arrow key navigation, Home and End, Escape to close, and closes on outside click.
+
+### Basic usage
+
+```tsx
+<Dropdown
+  trigger="Actions"
+  items={[
+    { id: `view`, label: `View profile` },
+    { id: `warn`, label: `Warn member` },
+  ]}
+  onSelect={(id) => console.log(id)}
+/>
+```
+
+### Danger items and dividers
+
+Mark destructive items with `danger` and add a separator above an item with `divider`.
+
+```tsx
+<Dropdown
+  trigger="Moderate"
+  items={[
+    { id: `timeout`, label: `Timeout` },
+    { id: `ban`, label: `Ban member`, danger: true, divider: true },
+  ]}
+/>
+```
+
+### Alignment and disabled items
+
+Align the menu to the trigger end and disable individual items.
+
+```tsx
+<Dropdown
+  align="end"
+  trigger="Options"
+  items={[
+    { id: `edit`, label: `Edit` },
+    { id: `archive`, label: `Archive`, disabled: true },
+  ]}
+/>
+```

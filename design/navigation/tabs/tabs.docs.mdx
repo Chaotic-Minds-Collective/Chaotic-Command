@@ -1,0 +1,51 @@
+---
+description: "Tabs / segmented filter with counts, controlled value, horizontally scrollable on mobile."
+labels: ["tabs", "navigation", "filter", "segmented"]
+---
+
+A segmented tab filter for switching between views such as ticket statuses. Each tab can show a count, and the list scrolls horizontally on narrow screens.
+
+## Basic usage
+
+```tsx
+<Tabs
+  items={[
+    { value: `all`, label: `All`, count: 24 },
+    { value: `open`, label: `Open`, count: 9 },
+    { value: `closed`, label: `Closed`, count: 15 },
+  ]}
+  defaultValue="all"
+/>
+```
+
+## Controlled value
+
+Pass `value` and `onChange` to control the selected tab.
+
+```tsx
+function TicketFilter() {
+  const [status, setStatus] = useState(`open`);
+  return (
+    <Tabs
+      value={status}
+      onChange={(next) => setStatus(next)}
+      items={[
+        { value: `all`, label: `All`, count: 24 },
+        { value: `open`, label: `Open`, count: 9 },
+        { value: `pending`, label: `Pending`, count: 5 },
+      ]}
+    />
+  );
+}
+```
+
+## Disabled tabs
+
+```tsx
+<Tabs
+  items={[
+    { value: `active`, label: `Active`, count: 3 },
+    { value: `archived`, label: `Archived`, disabled: true },
+  ]}
+/>
+```

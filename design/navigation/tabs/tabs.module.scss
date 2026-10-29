@@ -1,0 +1,98 @@
+.tabs {
+  box-sizing: border-box;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: var(--spacing-small);
+  max-width: 100%;
+  padding: 2px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  font-family: var(--typography-font-family);
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x proximity;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tab {
+  box-sizing: border-box;
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--spacing-small);
+  min-height: 36px;
+  padding: 6px 14px;
+  font: inherit;
+  font-size: var(--typography-sizes-body-small);
+  font-weight: var(--typography-font-weight-semi-bold);
+  color: var(--colors-text-primary);
+  white-space: nowrap;
+  background: transparent;
+  border: 1px solid var(--colors-surface-border);
+  border-radius: var(--borders-radius-medium);
+  cursor: pointer;
+  scroll-snap-align: start;
+  transition:
+    background var(--interactions-transitions-duration-fast) var(--interactions-transitions-easing-ease-in-out),
+    border-color var(--interactions-transitions-duration-fast) var(--interactions-transitions-easing-ease-in-out),
+    filter var(--interactions-transitions-duration-fast) var(--interactions-transitions-easing-ease-in-out);
+}
+
+.tab:hover:not(:disabled) {
+  background: var(--colors-surface-panel2);
+  border-color: var(--colors-primary-default);
+}
+
+.tab:focus-visible {
+  box-shadow: var(--effects-shadows-focus);
+}
+
+.tab:disabled {
+  cursor: var(--interactions-cursor-disabled);
+  opacity: var(--effects-opacity-disabled);
+}
+
+.label {
+  text-transform: capitalize;
+}
+
+.count {
+  min-width: 20px;
+  padding: 1px 7px;
+  font-size: var(--typography-sizes-caption-default);
+  font-weight: var(--typography-font-weight-bold);
+  color: var(--colors-text-muted);
+  text-align: center;
+  background: var(--colors-surface-panel2);
+  border-radius: var(--borders-radius-pill);
+}
+
+.active,
+.active:hover:not(:disabled) {
+  color: var(--colors-text-on-brand) !important;
+  background: var(--colors-primary-default);
+  border-color: var(--colors-primary-default);
+}
+
+.active:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.active .count {
+  color: var(--colors-text-on-brand) !important;
+  background: var(--colors-primary-active);
+}
+
+@media (min-width: 768px) {
+  .tabs {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+
+  .tab {
+    padding: 6px 16px;
+  }
+}

@@ -1,0 +1,39 @@
+---
+description: "Base SVG icon component with size, currentColor support, an accessible title and children paths. Used by all icon sets."
+labels: ["icon", "svg", "content"]
+---
+
+The `Icon` component is the base for every icon set. It renders an SVG that scales to the requested size, inherits the surrounding text color through `currentColor`, and accepts any SVG paths as children.
+
+## Basic usage
+
+Pass one or more paths as children. The icon inherits its color from the parent.
+
+```tsx
+<Icon size={32} title="Shield">
+  <path d="M12 2 L20 5 V11 C20 16 16.5 20.5 12 22 C7.5 20.5 4 16 4 11 V5 Z" />
+</Icon>
+```
+
+## Outline icons
+
+Set `outline` to draw the paths with a stroke instead of a fill, and adjust `strokeWidth` as needed.
+
+```tsx
+<Icon outline size={28} strokeWidth={1.5}>
+  <path d="M6 9 a6 6 0 0 1 12 0 c0 6 2 7 2 7 H4 s2 -1 2 -7 M10 20 a2 2 0 0 0 4 0" />
+</Icon>
+```
+
+## Accessibility
+
+When a `title` is provided the icon gets `role="img"` and a `<title>` element. Without a title it is decorative and hidden from assistive technology.
+
+```tsx
+<button type="button">
+  <Icon size={20}>
+    <path d="M12 2 L22 20 H2 Z" />
+  </Icon>
+  Warnings
+</button>
+```

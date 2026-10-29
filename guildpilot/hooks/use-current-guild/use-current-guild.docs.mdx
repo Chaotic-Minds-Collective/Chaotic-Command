@@ -1,0 +1,72 @@
+---
+description: "A React hook that reads the guild id from the route, fetches the user's guilds, and exposes the current guild with a switchGuild function. It remembers the last guild in localStorage."
+labels: ['hook', 'react', 'guild', 'routing']
+---
+
+`useCurrentGuild` reads the `:guildId` route param and fetches the guilds of the current user (`listUserGuilds`). It resolves the current guild and returns `{ guild, guilds, switchGuild }`, plus `loading`, `error` and `refetch`. When the route has no guild id, it falls back to the last remembered guild, then to the first guild. The last guild is saved in localStorage.
+
+## Usage
+
+### Basic usage
+
+```tsx
+function GuildHeader() {
+  const { guild, guilds, switchGuild, loading } = useCurrentGuild();
+
+  if (loading) return <span>Loading guilds...</span>;
+
+  return (
+    <div>
+      <h2>{guild?.name}</h2>
+      <select value={guild?.id} onChange={(event) => switchGuild(event.target.value)}>
+        {guilds.map((item) => (
+          <option key={item.id} value={item.id}>
+            {item.name}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+```
+
+### Sharing the guild with a provider
+
+Wrap a guild-scoped route with `GuildProvider`, then read the value anywhere below it with `useGuild`.
+
+```tsx
+function GuildName() {
+  const { guild } = useGuild();
+  return <strong>{guild?.name}</strong>;
+}
+
+function GuildScopedApp() {
+  return (
+    <Routes>
+      <Route
+        path="/guilds/:guildId/*"
+        element={
+          <GuildProvider>
+            <GuildName />
+          </GuildProvider>
+        }
+      />
+    </Routes>
+  );
+}
+```
+
+### Mock data and custom paths
+
+Pass `mockData` to skip the network query. Use `getGuildPath` to control where `switchGuild` navigates.
+
+```tsx
+function PreviewGuild() {
+  const { guild } = useCurrentGuild({
+    mockData: mockGuildSummaries(),
+    getGuildPath: (guildId) => `/g/${guildId}/overview`,
+  });
+
+  return <span>{guild?.name}</span>;
+}
+```

@@ -1,0 +1,104 @@
+.badge {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-xs);
+  padding: 3px 10px;
+  font-family: var(--typography-font-family);
+  font-size: var(--typography-sizes-caption-default);
+  font-weight: var(--typography-font-weight-bold);
+  line-height: 1.2;
+  letter-spacing: var(--typography-letter-spacing-wide);
+  text-transform: uppercase;
+  white-space: nowrap;
+  vertical-align: middle;
+  border-radius: var(--borders-radius-pill);
+  transition: filter var(--interactions-transitions-duration-fast) var(--interactions-transitions-easing-ease-in-out);
+}
+
+.label,
+.countValue {
+  display: inline-block;
+}
+
+.countValue {
+  font-variant-numeric: tabular-nums;
+}
+
+.dot {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--borders-radius-pill);
+  background: currentColor;
+  box-shadow: 0 0 0 3px transparent;
+}
+
+.critical {
+  background: var(--colors-status-danger-subtle);
+  color: var(--colors-status-danger-default);
+}
+
+.warning {
+  background: var(--colors-status-warning-subtle);
+  color: var(--colors-status-warning-default);
+}
+
+.info {
+  background: var(--colors-brand-subtle);
+  color: var(--colors-primary-default);
+}
+
+.success {
+  background: var(--colors-status-success-subtle);
+  color: var(--colors-status-success-default);
+}
+
+.neutral {
+  background: var(--colors-surface-panel2);
+  color: var(--colors-text-muted);
+}
+
+.count {
+  min-width: 20px;
+  padding: 1px 7px;
+  font-size: var(--typography-sizes-caption-default);
+  letter-spacing: var(--typography-letter-spacing-normal);
+}
+
+.count.critical {
+  background: var(--colors-status-danger-default);
+  color: var(--colors-text-on-brand) !important;
+}
+
+.count.warning {
+  background: var(--colors-status-warning-default);
+  color: var(--colors-text-inverse) !important;
+}
+
+.count.info {
+  background: var(--colors-primary-default);
+  color: var(--colors-text-on-brand) !important;
+}
+
+.count.success {
+  background: var(--colors-status-success-default);
+  color: var(--colors-text-inverse) !important;
+}
+
+.count.neutral {
+  background: var(--colors-surface-border);
+  color: var(--colors-text-primary) !important;
+}
+
+@media (max-width: 767px) {
+  .badge {
+    padding: 3px 8px;
+  }
+
+  .count {
+    padding: 1px 6px;
+  }
+}

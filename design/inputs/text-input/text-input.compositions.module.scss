@@ -1,0 +1,9 @@
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-large);
+  box-sizing: border-box;
+  max-width: 420px;
+  margin: 0 auto;
+  padding: var(--spacing-large);
+}

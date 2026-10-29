@@ -1,0 +1,35 @@
+---
+description: "Heading h1-h6 with fluid sizes, weight, muted option."
+labels: ["typography", "heading", "text"]
+---
+
+The `Heading` component renders semantic `h1` to `h6` elements using the GuildPilot theme typography tokens. Font sizes scale fluidly between mobile and desktop, and the weight and muted color are configurable.
+
+## Basic usage
+
+Choose the semantic level with the `level` prop.
+
+```tsx
+<Heading level={1}>Pilot your guild</Heading>
+```
+
+## Weight and muted
+
+Use `weight` to change the font weight and `muted` for secondary headings.
+
+```tsx
+<>
+  <Heading level={3} weight="extra-bold">Server health</Heading>
+  <Heading level={3} weight="regular" muted>Last 30 days</Heading>
+</>
+```
+
+## Decoupling size from semantics
+
+Use `size` to render a heading at a different visual size than its semantic level, which keeps the document outline correct.
+
+```tsx
+<Heading level={2} size={5} align="center" truncate>
+  A semantic h2 displayed at a smaller size
+</Heading>
+```

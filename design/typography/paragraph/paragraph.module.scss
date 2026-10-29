@@ -1,0 +1,43 @@
+.paragraph {
+  box-sizing: border-box;
+  margin: 0;
+  font-family: var(--typography-font-family);
+  font-weight: var(--typography-font-weight-regular);
+  line-height: var(--typography-line-height-base);
+  letter-spacing: var(--typography-letter-spacing-normal);
+  overflow-wrap: break-word;
+}
+
+.sm {
+  font-size: var(--typography-sizes-body-small);
+}
+
+.md {
+  font-size: var(--typography-sizes-body-default);
+}
+
+.lg {
+  font-size: var(--typography-sizes-body-large);
+}
+
+.default {
+  color: var(--colors-text-primary);
+}
+
+.muted {
+  color: var(--colors-text-muted);
+}
+
+.accent {
+  color: var(--colors-secondary-default);
+}
+
+.danger {
+  color: var(--colors-status-danger-default);
+}
+
+@media (max-width: 767px) {
+  .lg {
+    font-size: var(--typography-sizes-body-medium);
+  }
+}

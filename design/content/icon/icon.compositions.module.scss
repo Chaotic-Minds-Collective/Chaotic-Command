@@ -1,0 +1,34 @@
+.row {
+  box-sizing: border-box;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-large);
+  padding: var(--spacing-large);
+  font-family: var(--typography-font-family);
+  color: var(--colors-text-primary);
+}
+
+.brand {
+  color: var(--colors-primary-default);
+}
+
+.mint {
+  color: var(--colors-secondary-default);
+}
+
+.danger {
+  color: var(--colors-status-danger-default);
+}
+
+.warning {
+  color: var(--colors-status-warning-default);
+}
+
+.label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-small);
+  font-size: var(--typography-sizes-body-default);
+  font-weight: var(--typography-font-weight-semi-bold);
+}

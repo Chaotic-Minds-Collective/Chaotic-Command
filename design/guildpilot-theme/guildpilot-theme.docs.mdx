@@ -1,0 +1,78 @@
+---
+description: "A dark, Discord-inspired GuildPilot theme with blurple and mint accents, Inter typography, and an optional light variant."
+labels: ['react', 'design', 'theme', 'guildpilot', 'dark']
+---
+
+The GuildPilot theme defines the design language of the GuildPilot moderation dashboard as CSS variables: surfaces (background, panel, panel 2, border), text (primary, muted), brand blurple `#5865F2`, accent mint `#3BD6A0`, status colors, an Inter typography scale, spacing, radii (8, 10, 14, 99), shadows and a focus ring. It also resets the body margin.
+
+## Get started
+
+Install the theme and apply it at the root of your component tree.
+
+```bash
+$ bit install @chaotic-minds/design.guildpilot-theme
+```
+
+```tsx
+import { GuildpilotTheme } from '@chaotic-minds/design.guildpilot-theme';
+
+export function MyApp() {
+  return (
+    <GuildpilotTheme>
+      <Dashboard />
+    </GuildpilotTheme>
+  );
+}
+```
+
+## Light variant
+
+The theme is dark by default. Pass `initialTheme="light"` to start with the light variant.
+
+```tsx
+import { GuildpilotTheme } from '@chaotic-minds/design.guildpilot-theme';
+
+export function LightApp() {
+  return (
+    <GuildpilotTheme initialTheme="light">
+      <Dashboard />
+    </GuildpilotTheme>
+  );
+}
+```
+
+## Using tokens in CSS
+
+Every token becomes a CSS variable, for example `colors.surface.panel` is `--colors-surface-panel`.
+
+```tsx
+import { GuildpilotTheme, useThemeController } from '@chaotic-minds/design.guildpilot-theme';
+
+function ModeSwitch() {
+  const { themeMode, toggleTheme } = useThemeController();
+
+  return (
+    <button
+      type="button"
+      onClick={() => toggleTheme()}
+      style={{
+        background: 'var(--colors-primary-default)',
+        color: 'var(--colors-text-on-brand)',
+        borderRadius: 'var(--borders-radius-medium)',
+        border: 'none',
+        padding: '10px 18px',
+      }}
+    >
+      Current mode: {themeMode}
+    </button>
+  );
+}
+
+export function App() {
+  return (
+    <GuildpilotTheme overrides={{ colors: { primary: { default: '#6d79f5', hover: '#7d88f7', active: '#5865F2' } } }}>
+      <ModeSwitch />
+    </GuildpilotTheme>
+  );
+}
+```

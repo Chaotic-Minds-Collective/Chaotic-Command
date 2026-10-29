@@ -1,0 +1,31 @@
+.stage {
+  box-sizing: border-box;
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.grid {
+  box-sizing: border-box;
+  display: grid;
+  gap: var(--spacing-medium);
+  padding: 24px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+}
+
+.text {
+  margin: 0;
+  color: var(--colors-text-muted);
+}
+
+.button {
+  min-height: 36px;
+  padding: 6px 14px;
+  font: inherit;
+  font-weight: var(--typography-font-weight-semi-bold);
+  color: var(--colors-text-on-brand);
+  background: var(--colors-primary-default);
+  border: none;
+  border-radius: var(--borders-radius-medium);
+  cursor: pointer;
+}

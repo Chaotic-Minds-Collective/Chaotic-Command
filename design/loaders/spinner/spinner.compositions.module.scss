@@ -1,0 +1,38 @@
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-large);
+  padding: var(--spacing-large);
+}
+
+.card {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-medium);
+  max-width: 420px;
+  margin: var(--spacing-large) auto;
+  padding: var(--spacing-large);
+  background: var(--colors-surface-panel);
+  border: var(--borders-default-width) var(--borders-default-style) var(--colors-surface-border);
+  border-radius: var(--borders-radius-large);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-medium);
+}
+
+.grow {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (max-width: 767px) {
+  .card {
+    margin: var(--spacing-medium);
+    max-width: none;
+  }
+}

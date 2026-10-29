@@ -1,0 +1,23 @@
+.stack {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--spacing-medium);
+  padding: 24px;
+  color: var(--colors-text-primary);
+  font-family: var(--typography-font-family);
+}
+
+.sidebar {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  max-width: 248px;
+  margin: 24px;
+  padding: 16px;
+  background: var(--colors-surface-panel);
+  border: 1px solid var(--colors-surface-border);
+  border-radius: var(--borders-radius-large);
+}

@@ -1,0 +1,46 @@
+---
+description: "A panel card with border and 14px radius, optional title and actions slot, selectable state, interactive hover lift and padding sizes."
+labels: ["card", "panel", "content", "surface"]
+---
+
+The Card is the base content surface of GuildPilot. It uses the panel background, a subtle border and the large radius token.
+
+## Title and actions
+
+Add a `title` and an `actions` slot to render a header row.
+
+```tsx
+<Card
+  title="Raid detected in #general"
+  actions={<button type="button">Lock channel</button>}
+>
+  12 new accounts joined in 30 seconds.
+</Card>
+```
+
+## Selectable
+
+Use `selectable` with `selected` and `onSelect` to build option pickers such as template galleries.
+
+```tsx
+const [selected, setSelected] = useState(false);
+
+<Card
+  title="Gaming community"
+  selectable
+  selected={selected}
+  onSelect={() => setSelected(true)}
+>
+  Channels for LFG, clips and voice lobbies.
+</Card>
+```
+
+## Interactive and padding
+
+Set `interactive` to lift the card on hover. Use `padding` to choose `none`, `small`, `medium` or `large`.
+
+```tsx
+<Card interactive padding="large">
+  Hover me
+</Card>
+```

@@ -1,0 +1,43 @@
+---
+labels: ['user', 'entity', 'discord']
+description: "A User entity representing a Discord identity in GuildPilot."
+---
+
+The User entity represents a Discord identity: `id`, `discordId`, `username`, `globalName`, `avatarUrl`, `email` and `createdAt`. It supports serialization and de-serialization and can be used from both backend and frontend.
+
+## Create a user
+
+```tsx
+import { User } from '@chaotic-minds/chaotic-minds.guildpilot.entities.user';
+
+const user = User.fromObject({
+  discordId: '812345678901234567',
+  username: 'danielle',
+  globalName: 'Danielle',
+});
+
+console.log(user.displayName);
+```
+
+## Serialize a user
+
+```tsx
+import { User } from '@chaotic-minds/chaotic-minds.guildpilot.entities.user';
+
+const user = User.fromObject({ discordId: '123', username: 'rook' });
+const plain = user.toObject();
+const restored = User.fromObject(plain);
+
+console.log(restored.id === user.id);
+```
+
+## Mock data
+
+```tsx
+import { mockUser, mockUsers } from '@chaotic-minds/chaotic-minds.guildpilot.entities.user';
+
+const users = mockUsers();
+const custom = mockUser({ username: 'nova', globalName: null });
+
+console.log(users.length, custom.displayName);
+```

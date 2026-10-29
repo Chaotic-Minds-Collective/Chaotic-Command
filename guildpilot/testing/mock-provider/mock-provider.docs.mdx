@@ -1,0 +1,76 @@
+---
+description: "MockProvider wraps components with a MemoryRouter, an Apollo MockedProvider and the GuildPilot theme for previews and tests."
+labels: ["testing", "mock", "provider", "apollo", "router"]
+---
+
+MockProvider renders GuildPilot components in an isolated, fully mocked environment. It combines a React Router `MemoryRouter`, an Apollo `MockedProvider` and the `GuildpilotTheme`. It also accepts Apollo mocks and initial router entries.
+
+## Basic usage
+
+```tsx
+import { MockProvider } from '@chaotic-minds/guildpilot.testing.mock-provider';
+
+export function Preview() {
+  return (
+    <MockProvider>
+      <MyComponent />
+    </MockProvider>
+  );
+}
+```
+
+## Initial route and theme
+
+Start the memory router on a specific route and pick the theme mode.
+
+```tsx
+import { MockProvider } from '@chaotic-minds/guildpilot.testing.mock-provider';
+
+export function TicketsPreview() {
+  return (
+    <MockProvider initialEntries={['/guilds/42/tickets']} initialTheme="light">
+      <TicketsPage />
+    </MockProvider>
+  );
+}
+```
+
+## Apollo mocks and mock detection
+
+Pass Apollo mocked responses with `mocks`. Use `useIsMock` to detect a mocked context.
+
+```tsx
+import { gql } from '@apollo/client';
+import { useQuery } from '@apollo/client/react';
+import { MockProvider, useIsMock } from '@chaotic-minds/guildpilot.testing.mock-provider';
+
+const GET_CURRENT_USER = gql`
+  query GetCurrentUser {
+    getCurrentUser {
+      id
+      username
+    }
+  }
+`;
+
+const mocks = [
+  {
+    request: { query: GET_CURRENT_USER },
+    result: { data: { getCurrentUser: { id: '1', username: 'pilot' } } },
+  },
+];
+
+function CurrentUser() {
+  const isMock = useIsMock();
+  const { data } = useQuery(GET_CURRENT_USER);
+  return <span>{isMock ? 'mock: ' : ''}{data?.getCurrentUser?.username}</span>;
+}
+
+export function UserPreview() {
+  return (
+    <MockProvider mocks={mocks}>
+      <CurrentUser />
+    </MockProvider>
+  );
+}
+```

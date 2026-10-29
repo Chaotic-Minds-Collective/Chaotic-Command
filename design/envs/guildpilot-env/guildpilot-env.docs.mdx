@@ -1,0 +1,58 @@
+---
+description: 'A custom React development environment for GuildPilot that wraps compositions in the dark GuildpilotTheme.'
+labels: ['env', 'react', 'guildpilot', 'theme', 'vite', 'vitest']
+---
+
+A reusable React development environment for GuildPilot. It extends the standard React env and wraps every composition preview in the dark GuildpilotTheme, so components render the same way in previews as they do in the app.
+
+## Use in existing workspaces
+
+This example shows how to register the env in the generator configuration of your workspace, so its templates become available.
+
+```json
+{
+  "teambit.generator/generator": {
+    "envs": [
+      "chaotic-minds.guildpilot/guildpilot-env"
+    ]
+  }
+}
+
+You can see the generator templates in your workspace using the templates command of Bit.
+
+```
+
+## Use on an existing component
+
+This example shows how to apply the env to a component that already exists in your workspace. Compositions of that component will render inside the dark theme.
+
+
+```json
+bit env set my-component chaotic-minds.guildpilot/guildpilot-env
+
+```
+
+## Create a React workspace
+
+This example shows how to create a new workspace that uses the env as its base.
+
+
+```json
+bit new react my-workspace --aspect chaotic-minds.guildpilot/guildpilot-env
+
+```
+
+## Compose your own env
+
+This example shows how to extend the env and override the class methods you need, such as the preview mounter or the configuration paths.
+
+
+```json
+export class MyGuildpilotEnv extends GuildpilotEnv {
+  name = 'my-guildpilot-env';
+
+  protected strict = true;
+}
+
+export default new MyGuildpilotEnv();
+```

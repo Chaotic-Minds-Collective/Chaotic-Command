@@ -1,0 +1,31 @@
+---
+description: "Spinner and skeleton line/block loaders for GuildPilot, with a rotating ring and shimmering placeholders."
+labels: ["loader", "spinner", "skeleton", "loading"]
+---
+
+A themeable loading indicator. Use the rotating ring for short waits, and skeleton lines or blocks to reserve space while content loads.
+
+## Spinner ring
+
+```tsx
+<Spinner size="large" showLabel label="Syncing server health" />
+```
+
+## Skeleton lines
+
+Render placeholder text lines. The last line is shorter to resemble a paragraph.
+
+```tsx
+<Spinner variant="line" lines={4} label="Loading ticket" />
+```
+
+## Skeleton blocks
+
+Use a block for cards, charts or images, or set `circle` for avatars.
+
+```tsx
+<div>
+  <Spinner variant="block" circle width="48px" label="Loading avatar" />
+  <Spinner variant="block" height="120px" label="Loading chart" />
+</div>
+```

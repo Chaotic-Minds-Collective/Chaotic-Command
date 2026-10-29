@@ -1,0 +1,51 @@
+---
+description: "A router-agnostic link with default, muted and nav variants, an active state and automatic external link handling."
+labels: ["link", "navigation", "router"]
+---
+
+A themeable anchor that works with any router. Internal clicks can be delegated to your router through `onNavigate`, and absolute urls are treated as external links automatically.
+
+## Variants
+
+Choose between `default`, `muted` and `nav`.
+
+```tsx
+<Link href="/docs">Default link</Link>
+<Link href="/docs" variant="muted">Muted link</Link>
+<Link href="/overview" variant="nav" icon="📊" active>Overview</Link>
+```
+
+## Use with react-router
+
+Pass the router navigate function to `onNavigate` to get client-side navigation, and drive the `active` state from the current location.
+
+```tsx
+import { useLocation, useNavigate } from 'react-router-dom';
+
+function SidebarLink({ to, label }: { to: string; label: string }) {
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+
+  return (
+    <Link
+      href={to}
+      variant="nav"
+      active={pathname === to}
+      onNavigate={(href) => navigate(href)}
+    >
+      {label}
+    </Link>
+  );
+}
+```
+
+## External links
+
+Absolute urls open in a new tab with `rel="noopener noreferrer"` and show an indicator icon. Use `external` to force this behavior or `hideExternalIcon` to hide the icon.
+
+```tsx
+<Link href="https://discord.com/developers/docs">Discord developer docs</Link>
+<Link href="https://status.discord.com" variant="muted" hideExternalIcon>
+  Discord status
+</Link>
+```

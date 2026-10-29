@@ -1,0 +1,29 @@
+---
+description: "Avatar with an image or initials fallback, five sizes, round or square (server icon) shapes and an optional online, idle, dnd or offline status dot."
+labels: ["avatar", "content", "user", "status", "guildpilot"]
+---
+
+The Avatar displays a user or server image. When no image is given, or it fails to load, it falls back to colorful initials derived from the name.
+
+### Image and initials fallback
+
+```tsx
+<Avatar src="https://example.com/nova.png" name="Nova Cat" size="lg" />
+<Avatar name="Mira Solano" size="lg" />
+```
+
+### Square server icons
+
+Use `shape="square"` for server icons and `size` to choose between `xs`, `sm`, `md`, `lg` and `xl`.
+
+```tsx
+<Avatar name="GuildPilot HQ" shape="square" size="xl" />
+```
+
+### Status dot
+
+Add a `status` of `online`, `idle`, `dnd` or `offline` to show a presence indicator.
+
+```tsx
+<Avatar name="Kai Tanaka" size="lg" status="dnd" />
+```

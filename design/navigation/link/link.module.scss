@@ -1,0 +1,102 @@
+.link {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-small);
+  font-family: var(--typography-font-family);
+  font-size: inherit;
+  text-decoration: none;
+  cursor: var(--interactions-cursor-pointer);
+  transition:
+    color var(--interactions-transitions-duration-fast) var(--interactions-transitions-easing-ease-in-out),
+    background var(--interactions-transitions-duration-fast) var(--interactions-transitions-easing-ease-in-out);
+}
+
+.link:focus-visible {
+  box-shadow: var(--effects-shadows-focus);
+}
+
+.default {
+  color: var(--colors-primary-default);
+  font-weight: var(--typography-font-weight-medium);
+  border-radius: var(--borders-radius-small);
+}
+
+.default:hover {
+  color: var(--colors-primary-hover);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.default.active {
+  color: var(--colors-primary-active);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.muted {
+  color: var(--colors-text-muted);
+  font-size: var(--typography-sizes-body-small);
+  border-radius: var(--borders-radius-small);
+}
+
+.muted:hover {
+  color: var(--colors-text-primary);
+}
+
+.muted.active {
+  color: var(--colors-text-primary);
+}
+
+.nav {
+  display: flex;
+  min-height: 44px;
+  padding: 10px 13px;
+  color: var(--colors-text-muted);
+  font-weight: var(--typography-font-weight-medium);
+  white-space: nowrap;
+  border-radius: var(--borders-radius-medium);
+}
+
+.nav:hover {
+  color: var(--colors-text-primary);
+  background: var(--colors-surface-panel2);
+}
+
+.nav.active {
+  color: var(--colors-text-primary);
+  background: var(--colors-brand-subtle);
+}
+
+.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.label {
+  min-width: 0;
+}
+
+.badge {
+  margin-left: auto;
+  padding: 2px 8px;
+  color: var(--colors-text-on-brand);
+  font-size: var(--typography-sizes-caption-default);
+  line-height: var(--typography-line-height-base);
+  background: var(--colors-status-danger-default);
+  border-radius: var(--borders-radius-pill);
+}
+
+.externalIcon {
+  flex-shrink: 0;
+  font-size: 0.85em;
+  opacity: var(--effects-opacity-semi-opaque);
+}
+
+@media (max-width: 767px) {
+  .nav {
+    padding: 10px 12px;
+  }
+}

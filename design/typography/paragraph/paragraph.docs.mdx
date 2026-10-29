@@ -1,0 +1,37 @@
+---
+description: "Paragraph with sizes sm/md/lg and tone default/muted/accent/danger."
+labels: ["typography", "paragraph", "text"]
+---
+
+A themed paragraph for body copy. It uses the GuildPilot body typography tokens and supports three sizes and four tones.
+
+## Basic usage
+
+```tsx
+<Paragraph>Pilot your guild with confidence.</Paragraph>
+```
+
+## Sizes
+
+Choose between `sm`, `md` (default) and `lg`.
+
+```tsx
+<>
+  <Paragraph size="sm">Small paragraph</Paragraph>
+  <Paragraph size="md">Medium paragraph</Paragraph>
+  <Paragraph size="lg">Large paragraph</Paragraph>
+</>
+```
+
+## Tones
+
+Use `default`, `muted`, `accent` or `danger` to convey meaning.
+
+```tsx
+<>
+  <Paragraph tone="default">Ticket #482 is awaiting a reply.</Paragraph>
+  <Paragraph tone="muted">Opened 2 hours ago.</Paragraph>
+  <Paragraph tone="accent">Auto-moderation resolved 38 reports.</Paragraph>
+  <Paragraph tone="danger">Critical raid detected.</Paragraph>
+</>
+```

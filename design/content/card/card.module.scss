@@ -1,0 +1,95 @@
+.card {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  font-family: var(--typography-font-family);
+  color: var(--colors-text-primary);
+  background: var(--colors-surface-panel);
+  border: 1px solid var(--colors-surface-border);
+  border-radius: var(--borders-radius-large);
+  transition:
+    transform var(--interactions-transitions-duration-fast) var(--interactions-transitions-easing-ease-in-out),
+    border-color var(--interactions-transitions-duration-fast) var(--interactions-transitions-easing-ease-in-out),
+    box-shadow var(--interactions-transitions-duration-fast) var(--interactions-transitions-easing-ease-in-out);
+}
+
+.paddingNone {
+  padding: 0;
+}
+
+.paddingSmall {
+  padding: 12px;
+}
+
+.paddingMedium {
+  padding: 18px;
+}
+
+.paddingLarge {
+  padding: 28px;
+}
+
+.clickable {
+  cursor: var(--interactions-cursor-pointer);
+}
+
+.interactive:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--effects-shadows-medium);
+}
+
+.clickable:focus-visible {
+  box-shadow: var(--effects-shadows-focus);
+}
+
+.selected {
+  border-color: var(--colors-primary-default);
+  box-shadow: 0 0 0 1px var(--colors-primary-default);
+}
+
+.selected:hover {
+  box-shadow: 0 0 0 1px var(--colors-primary-default), var(--effects-shadows-medium);
+}
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-small);
+}
+
+.title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: var(--typography-sizes-body-large);
+  font-weight: var(--typography-font-weight-bold);
+  line-height: var(--typography-line-height-heading);
+}
+
+.spacer {
+  flex: 1;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-small);
+}
+
+.body {
+  min-width: 0;
+  font-size: var(--typography-sizes-body-default);
+  line-height: var(--typography-line-height-base);
+}
+
+@media (max-width: 767px) {
+  .paddingLarge {
+    padding: 20px;
+  }
+}

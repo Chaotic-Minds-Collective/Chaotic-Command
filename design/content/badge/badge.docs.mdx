@@ -1,0 +1,42 @@
+---
+description: "A pill badge with critical, warning, info/brand, success and neutral tones, an uppercase small label and optional dot or count variants."
+labels: ["badge", "pill", "status", "content"]
+---
+
+A compact, uppercase pill for statuses, severities and counters. Colors come from the GuildPilot theme tokens.
+
+## Tones
+
+Pick a tone with the `tone` prop. `brand` is an alias of `info`.
+
+```tsx
+<>
+  <Badge tone="critical">Critical</Badge>
+  <Badge tone="warning">Pending</Badge>
+  <Badge tone="info">Upgrade</Badge>
+  <Badge tone="success">Resolved</Badge>
+  <Badge tone="neutral">Closed</Badge>
+</>
+```
+
+## Dot variant
+
+Add a status dot before the label with `variant="dot"`.
+
+```tsx
+<>
+  <Badge tone="success" variant="dot">Online</Badge>
+  <Badge tone="critical" variant="dot">Raid detected</Badge>
+</>
+```
+
+## Count variant
+
+Show a compact solid counter with `variant="count"`. Use `max` to cap large numbers and `hideZero` to hide the badge when empty.
+
+```tsx
+<>
+  <Badge tone="critical" variant="count" count={4} />
+  <Badge tone="neutral" variant="count" count={250} max={99} />
+</>
+```

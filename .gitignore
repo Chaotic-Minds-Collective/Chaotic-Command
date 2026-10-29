@@ -1,0 +1,32 @@
+# Installed dependencies
+node_modules/
+
+# Bit local scope, caches, and temporary workspace data
+.bit/
+.tmp/
+
+# Build outputs and test artifacts
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# Environment variables and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+id_rsa
+credentials.json
+
+# Logs and local history
+*.log
+.history
+
+# Local connector configuration
+.mcp.json
+
+# Operating system files
+.DS_Store
+Thumbs.db

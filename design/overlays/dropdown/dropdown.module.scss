@@ -1,0 +1,173 @@
+.dropdown {
+  position: relative;
+  display: inline-block;
+  font-family: var(--typography-font-family);
+}
+
+.trigger {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-small);
+  min-height: 44px;
+  padding: 0 var(--spacing-medium);
+  font: inherit;
+  font-size: var(--typography-sizes-body-default);
+  font-weight: var(--typography-font-weight-semi-bold);
+  color: var(--colors-text-primary);
+  background: var(--colors-surface-secondary);
+  border: var(--borders-default-width) var(--borders-default-style) var(--colors-surface-border);
+  border-radius: var(--borders-radius-medium);
+  cursor: var(--interactions-cursor-pointer);
+  transition:
+    border-color var(--interactions-transitions-duration-fast) var(--interactions-transitions-easing-ease-in-out),
+    background var(--interactions-transitions-duration-fast) var(--interactions-transitions-easing-ease-in-out);
+}
+
+.trigger:hover {
+  border-color: var(--colors-primary-default);
+}
+
+.trigger:focus-visible {
+  box-shadow: var(--effects-shadows-focus);
+}
+
+.trigger:disabled {
+  opacity: var(--effects-opacity-disabled);
+  cursor: var(--interactions-cursor-disabled);
+}
+
+.triggerOpen {
+  border-color: var(--colors-primary-default);
+  background: var(--colors-surface-panel2);
+}
+
+.triggerContent {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-small);
+}
+
+.chevron {
+  flex-shrink: 0;
+  color: var(--colors-text-muted);
+  transition: transform var(--interactions-transitions-duration-fast) var(--interactions-transitions-easing-ease-in-out);
+}
+
+.triggerOpen .chevron {
+  transform: rotate(180deg);
+}
+
+.menu {
+  box-sizing: border-box;
+  position: absolute;
+  top: calc(100% + 6px);
+  z-index: var(--interactions-z-index-overlay);
+  display: flex;
+  flex-direction: column;
+  min-width: 200px;
+  max-width: calc(100vw - 24px);
+  padding: var(--spacing-xs);
+  background: var(--colors-surface-panel);
+  border: var(--borders-default-width) var(--borders-default-style) var(--colors-surface-border);
+  border-radius: var(--borders-radius-large);
+  box-shadow: var(--effects-shadows-large);
+  animation: menuIn var(--interactions-transitions-duration-fast) var(--interactions-transitions-easing-ease-out);
+}
+
+.alignStart {
+  left: 0;
+}
+
+.alignEnd {
+  right: 0;
+}
+
+.item {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-small);
+  width: 100%;
+  min-height: 40px;
+  padding: var(--spacing-small) var(--spacing-medium);
+  font: inherit;
+  font-size: var(--typography-sizes-body-default);
+  font-weight: var(--typography-font-weight-medium);
+  text-align: start;
+  color: var(--colors-text-primary);
+  background: transparent;
+  border: none;
+  border-radius: var(--borders-radius-medium);
+  cursor: var(--interactions-cursor-pointer);
+  transition: background var(--interactions-transitions-duration-fast) var(--interactions-transitions-easing-ease-in-out);
+}
+
+.item:hover,
+.active {
+  background: var(--colors-surface-panel2);
+}
+
+.item:focus-visible {
+  box-shadow: var(--effects-shadows-focus);
+}
+
+.item:disabled {
+  opacity: var(--effects-opacity-disabled);
+  cursor: var(--interactions-cursor-disabled);
+}
+
+.danger {
+  color: var(--colors-status-danger-default);
+}
+
+.danger:hover,
+.danger.active {
+  background: var(--colors-status-danger-subtle);
+}
+
+.icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  color: var(--colors-text-muted);
+}
+
+.danger .icon {
+  color: var(--colors-status-danger-default);
+}
+
+.label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.divider {
+  height: 1px;
+  margin: var(--spacing-xs) 0;
+  background: var(--colors-surface-border);
+}
+
+@keyframes menuIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 767px) {
+  .menu {
+    min-width: 180px;
+  }
+}

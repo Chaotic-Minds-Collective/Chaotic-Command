@@ -1,0 +1,42 @@
+---
+description: "A dark text input with label, hint, error message, prefix and suffix slots, and three sizes."
+labels: ["input", "form", "text-input"]
+---
+
+The text input sits on the dark `panel-2` surface and supports a label, helper text, error state, prefix and suffix content, and three sizes.
+
+## Basic usage
+
+```tsx
+<TextInput
+  label="Server name"
+  hint="This is how your guild appears in the dashboard."
+  placeholder="e.g. Chaotic Minds"
+/>
+```
+
+## Error state with prefix
+
+When `error` is set, it replaces the hint and the field switches to the danger style.
+
+```tsx
+<TextInput
+  label="Log channel"
+  prefix="#"
+  defaultValue="mod log"
+  error="Channel names cannot contain spaces."
+  required
+/>
+```
+
+## Sizes
+
+Choose between `small`, `medium` and `large`.
+
+```tsx
+<>
+  <TextInput size="small" label="Small" />
+  <TextInput size="medium" label="Medium" />
+  <TextInput size="large" label="Large" />
+</>
+```

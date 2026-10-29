@@ -1,0 +1,81 @@
+.heading {
+  box-sizing: border-box;
+  margin: 0;
+  font-family: var(--typography-font-family);
+  line-height: var(--typography-line-height-heading);
+  letter-spacing: var(--typography-letter-spacing-tight);
+  color: var(--colors-text-primary);
+  overflow-wrap: break-word;
+}
+
+.muted {
+  color: var(--colors-text-muted);
+}
+
+.truncate {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.sizeOne {
+  font-size: clamp(1.6rem, 1.1rem + 2.4vw, var(--typography-sizes-heading-h1));
+}
+
+.sizeTwo {
+  font-size: clamp(1.4rem, 1rem + 1.8vw, var(--typography-sizes-heading-h2));
+}
+
+.sizeThree {
+  font-size: clamp(1.2rem, 0.95rem + 1.2vw, var(--typography-sizes-heading-h3));
+}
+
+.sizeFour {
+  font-size: clamp(1.1rem, 0.9rem + 0.8vw, var(--typography-sizes-heading-h4));
+}
+
+.sizeFive {
+  font-size: clamp(1rem, 0.9rem + 0.5vw, var(--typography-sizes-heading-h5));
+}
+
+.sizeSix {
+  font-size: clamp(0.9rem, 0.85rem + 0.3vw, var(--typography-sizes-heading-h6));
+}
+
+.weightRegular {
+  font-weight: var(--typography-font-weight-regular);
+}
+
+.weightMedium {
+  font-weight: var(--typography-font-weight-medium);
+}
+
+.weightSemiBold {
+  font-weight: var(--typography-font-weight-semi-bold);
+}
+
+.weightBold {
+  font-weight: var(--typography-font-weight-bold);
+}
+
+.weightExtraBold {
+  font-weight: var(--typography-font-weight-extra-bold);
+}
+
+.alignStart {
+  text-align: start;
+}
+
+.alignCenter {
+  text-align: center;
+}
+
+.alignEnd {
+  text-align: end;
+}
+
+@media (max-width: 767px) {
+  .heading {
+    letter-spacing: var(--typography-letter-spacing-normal);
+  }
+}

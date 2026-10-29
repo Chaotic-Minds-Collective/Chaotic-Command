@@ -1,0 +1,16 @@
+.stage {
+  box-sizing: border-box;
+  padding: 24px;
+  font-family: var(--typography-font-family);
+  color: var(--colors-text-primary);
+  background: var(--colors-surface-panel);
+  border: 1px solid var(--colors-surface-border);
+  border-radius: var(--borders-radius-large);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-medium);
+}

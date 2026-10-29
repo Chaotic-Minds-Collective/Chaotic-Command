@@ -1,0 +1,56 @@
+---
+labels: ['guild', 'entity', 'guildpilot']
+description: "A GuildSummary entity describing a Discord guild the current user belongs to."
+---
+
+A component for a GuildSummary entity. It supports serialization and de-serialization of guild summaries and can be used from both backend and frontend.
+
+## Get started
+
+Create a guild summary from a plain object:
+
+```tsx
+import { GuildSummary } from '@chaotic-minds/guildpilot.entities.guild-summary';
+
+const guild = GuildSummary.from({
+  id: 's1',
+  name: 'Chaotic Minds HQ',
+  iconUrl: null,
+  isOwner: true,
+  canManage: true,
+  botInstalled: true,
+});
+
+console.log(guild.toObject());
+```
+
+## Initials
+
+Use `initials()` to render a fallback avatar when a guild has no icon.
+
+```tsx
+import { GuildSummary } from '@chaotic-minds/guildpilot.entities.guild-summary';
+
+const guild = GuildSummary.from({
+  id: 's2',
+  name: 'Pixel Forge Gaming',
+  isOwner: false,
+  canManage: true,
+  botInstalled: false,
+});
+
+console.log(guild.initials()); // "PF"
+```
+
+## Mock data
+
+Use the mock helpers for development and testing.
+
+```tsx
+import { mockGuildSummaries, mockGuildSummary } from '@chaotic-minds/guildpilot.entities.guild-summary';
+
+const guilds = mockGuildSummaries();
+const unmanaged = mockGuildSummary({ canManage: false });
+
+console.log(guilds, unmanaged);
+```
