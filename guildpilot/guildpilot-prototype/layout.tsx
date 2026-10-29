@@ -35,7 +35,7 @@ export function Layout({ children, serverId, onServerChange }: { children: React
             </NavLink>
           ))}
         </nav>
-        <div className={styles.sideFooter}>Bot status: <span style={{ color: '#3BD6A0' }}>● Online</span></div>
+        <div className={styles.sideFooter}>Discord connection: <span style={{ color: '#E5B45C' }}>● Not connected</span></div>
       </aside>
       <main className={styles.main}>{children}</main>
     </div>
