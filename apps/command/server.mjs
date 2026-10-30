@@ -63,7 +63,16 @@ export function createApp(config = {}) {
     if (!response.ok) throw new HttpError(response.status === 401 ? 401 : response.status === 403 ? 403 : 502, response.status === 401 ? 'Discord authorization expired or is invalid. Sign in again or check the bot token.' : response.status === 403 ? 'Discord denied access. Check bot membership, permissions and role hierarchy.' : 'Discord rejected the request. Refresh the preview before retrying.');
     return response.status === 204 ? null : response.json();
   }
-  const bot = (path, options) => discord(path, `Bot ${env.DISCORD_BOT_TOKEN}`, options);
+  const selectedBot = session => {
+    if (session.selectedBotId) {
+      const row = db.prepare('SELECT id, discord_bot_id, username, token_encrypted FROM user_bots WHERE id = ? AND owner_id = ?').get(session.selectedBotId, session.user.id);
+      if (!row) throw new HttpError(409, 'Your selected bot is no longer connected. Choose another bot.');
+      return { id: row.id, discordBotId: row.discord_bot_id, username: row.username, token: decrypt(row.token_encrypted) };
+    }
+    if (sharedBotConfigured) return { id: 'shared', discordBotId: env.DISCORD_CLIENT_ID, username: 'Chaotic Command shared bot', token: env.DISCORD_BOT_TOKEN };
+    throw new HttpError(409, 'Connect your own Discord bot or select an available bot before continuing.');
+  };
+  const bot = (session, path, options) => discord(path, `Bot ${selectedBot(session).token}`, options);
   async function guilds(session) {
     if (!session.user || session.tokenExpires <= Date.now()) throw new HttpError(401, 'Sign in with Discord again.');
     const result = [];
@@ -84,8 +93,8 @@ export function createApp(config = {}) {
   }
   async function snapshot(session, id) {
     await authorize(session, id);
-    const [roles, channels, me] = await Promise.all([bot(`/guilds/${id}/roles`), bot(`/guilds/${id}/channels`), bot('/users/@me')]);
-    const member = await bot(`/guilds/${id}/members/${me.id}`);
+    const [roles, channels, me] = await Promise.all([bot(session, `/guilds/${id}/roles`), bot(session, `/guilds/${id}/channels`), bot(session, '/users/@me')]);
+    const member = await bot(session, `/guilds/${id}/members/${me.id}`);
     const permissions = roles.filter(r => r.id === id || member.roles.includes(r.id)).reduce((p, r) => p | BigInt(r.permissions), 0n);
     if (!hasPermission(permissions, 16n) || !hasPermission(permissions, 268435456n)) throw new HttpError(403, 'Bot needs Manage Channels and Manage Roles. Place its role above roles it creates.');
     return { roles, channels };
