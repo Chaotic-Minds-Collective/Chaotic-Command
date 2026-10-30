@@ -236,7 +236,7 @@ test('personal saved structures are validated and isolated by Discord account', 
   assert.equal(response.status, 201, 'Unicode names should be accepted');
 
   response = await fetch(`${url}/api/structures`, {
-    method: 'POST', headers: headers(a), body: JSON.stringify({ name: 'CAFE\\u0301', structure })
+    method: 'POST', headers: headers(a), body: JSON.stringify({ name: 'CAFE\u0301', structure })
   });
   assert.equal(response.status, 409, 'Unicode names should be normalized and compared case-insensitively');
 
