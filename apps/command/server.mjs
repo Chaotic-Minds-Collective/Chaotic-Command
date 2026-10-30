@@ -18,14 +18,16 @@ export function createApp(config = {}) {
   const fetcher = config.fetch || globalThis.fetch;
   const origin = new URL(env.APP_ORIGIN || 'http://localhost:3000').origin;
   const secure = origin.startsWith('https:');
-  const configured = Boolean(env.DISCORD_CLIENT_ID && env.DISCORD_CLIENT_SECRET && env.DISCORD_BOT_TOKEN);
+  const oauthConfigured = Boolean(env.DISCORD_CLIENT_ID && env.DISCORD_CLIENT_SECRET);
+  const sharedBotConfigured = Boolean(env.DISCORD_BOT_TOKEN);
+  const configured = oauthConfigured;
   if (env.NODE_ENV === 'production' && !secure) throw new Error('Production APP_ORIGIN must use HTTPS.');
   if ((configured || env.NODE_ENV === 'production') && (env.SESSION_SECRET || '').length < 32) throw new Error('Set SESSION_SECRET to at least 32 random characters.');
   const key = createHash('sha256').update(env.SESSION_SECRET || random()).digest();
   const dbPath = config.dbPath || resolve(env.DATA_DIR || '.data', 'command.sqlite');
   if (dbPath !== ':memory:') mkdirSync(dirname(dbPath), { recursive: true, mode: 0o700 });
   const db = new DatabaseSync(dbPath);
-  db.exec(`PRAGMA journal_mode=WAL; CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, data TEXT NOT NULL, expires INTEGER NOT NULL); CREATE TABLE IF NOT EXISTS notes (guild TEXT PRIMARY KEY, value TEXT NOT NULL); CREATE TABLE IF NOT EXISTS saved_structures (id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, name TEXT NOT NULL, structure_json TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL); CREATE UNIQUE INDEX IF NOT EXISTS saved_structures_owner_name ON saved_structures(owner_id, name COLLATE NOCASE);`);
+  db.exec(`PRAGMA journal_mode=WAL; CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, data TEXT NOT NULL, expires INTEGER NOT NULL); CREATE TABLE IF NOT EXISTS notes (guild TEXT PRIMARY KEY, value TEXT NOT NULL); CREATE TABLE IF NOT EXISTS saved_structures (id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, name TEXT NOT NULL, structure_json TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL); CREATE UNIQUE INDEX IF NOT EXISTS saved_structures_owner_name ON saved_structures(owner_id, name COLLATE NOCASE); CREATE TABLE IF NOT EXISTS user_bots (id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, discord_bot_id TEXT NOT NULL, username TEXT NOT NULL, token_encrypted TEXT NOT NULL, created_at INTEGER NOT NULL, UNIQUE(owner_id, discord_bot_id)); CREATE INDEX IF NOT EXISTS user_bots_owner ON user_bots(owner_id, created_at); CREATE TABLE IF NOT EXISTS guild_bot_selections (owner_id TEXT NOT NULL, guild_id TEXT NOT NULL, bot_id TEXT NOT NULL, PRIMARY KEY(owner_id, guild_id));`);
   const lock = createGuildLock();
   const encrypt = value => {
     const iv = randomBytes(12), cipher = createCipheriv('aes-256-gcm', key, iv);
@@ -61,7 +63,21 @@ export function createApp(config = {}) {
     if (!response.ok) throw new HttpError(response.status === 401 ? 401 : response.status === 403 ? 403 : 502, response.status === 401 ? 'Discord authorization expired or is invalid. Sign in again or check the bot token.' : response.status === 403 ? 'Discord denied access. Check bot membership, permissions and role hierarchy.' : 'Discord rejected the request. Refresh the preview before retrying.');
     return response.status === 204 ? null : response.json();
   }
-  const bot = (path, options) => discord(path, `Bot ${env.DISCORD_BOT_TOKEN}`, options);
+  const selectedBot = (session, guildId) => {
+    const assignment = guildId ? db.prepare('SELECT bot_id FROM guild_bot_selections WHERE owner_id = ? AND guild_id = ?').get(session.user.id, guildId) : null;
+    const selectedId = assignment?.bot_id || session.selectedBotId;
+    if (selectedId === 'shared' || (!selectedId && sharedBotConfigured)) {
+      if (sharedBotConfigured) return { id: 'shared', discordBotId: env.DISCORD_CLIENT_ID, username: 'Chaotic Command shared bot', token: env.DISCORD_BOT_TOKEN };
+      throw new HttpError(409, 'The shared bot is not available. Choose one of your connected bots.');
+    }
+    if (selectedId) {
+      const row = db.prepare('SELECT id, discord_bot_id, username, token_encrypted FROM user_bots WHERE id = ? AND owner_id = ?').get(selectedId, session.user.id);
+      if (!row) throw new HttpError(409, 'Your selected bot is no longer connected. Choose another bot.');
+      return { id: row.id, discordBotId: row.discord_bot_id, username: row.username, token: decrypt(row.token_encrypted) };
+    }
+    throw new HttpError(409, 'Connect your own Discord bot or select an available bot before continuing.');
+  };
+  const bot = (session, path, options, guildId) => discord(path, `Bot ${selectedBot(session, guildId).token}`, options);
   async function guilds(session) {
     if (!session.user || session.tokenExpires <= Date.now()) throw new HttpError(401, 'Sign in with Discord again.');
     const result = [];
@@ -82,8 +98,8 @@ export function createApp(config = {}) {
   }
   async function snapshot(session, id) {
     await authorize(session, id);
-    const [roles, channels, me] = await Promise.all([bot(`/guilds/${id}/roles`), bot(`/guilds/${id}/channels`), bot('/users/@me')]);
-    const member = await bot(`/guilds/${id}/members/${me.id}`);
+    const [roles, channels, me] = await Promise.all([bot(session, `/guilds/${id}/roles`, undefined, id), bot(session, `/guilds/${id}/channels`, undefined, id), bot(session, '/users/@me', undefined, id)]);
+    const member = await bot(session, `/guilds/${id}/members/${me.id}`, undefined, id);
     const permissions = roles.filter(r => r.id === id || member.roles.includes(r.id)).reduce((p, r) => p | BigInt(r.permissions), 0n);
     if (!hasPermission(permissions, 16n) || !hasPermission(permissions, 268435456n)) throw new HttpError(403, 'Bot needs Manage Channels and Manage Roles. Place its role above roles it creates.');
     return { roles, channels };
@@ -161,6 +177,74 @@ export function createApp(config = {}) {
         res.setHeader('Set-Cookie', cookie('', 0)); return json(res, 200, { ok: true });
       }
       ensureConfigured();
+      if (path === '/api/bots' && req.method === 'GET') {
+        const rows = db.prepare('SELECT id, discord_bot_id, username, created_at FROM user_bots WHERE owner_id = ? ORDER BY created_at DESC').all(session.user.id);
+        const bots = rows.map(row => ({ id: row.id, discordBotId: row.discord_bot_id, username: row.username, createdAt: row.created_at, inviteUrl: `https://discord.com/oauth2/authorize?${new URLSearchParams({ client_id: row.discord_bot_id, scope: 'bot', permissions: '268435472' })}` }));
+        const sharedBot = sharedBotConfigured ? { id: 'shared', username: 'Chaotic Command shared bot', inviteUrl: `https://discord.com/oauth2/authorize?${new URLSearchParams({ client_id: env.DISCORD_CLIENT_ID, scope: 'bot', permissions: '268435472' })}` } : null;
+        return json(res, 200, { bots, selectedBotId: session.selectedBotId || (sharedBotConfigured ? 'shared' : ''), sharedBot });
+      }
+      if (path === '/api/bots' && req.method === 'POST') {
+        const data = await body(req);
+        if (!data || typeof data !== 'object' || Array.isArray(data) || Object.keys(data).length !== 1 || typeof data.token !== 'string') throw new HttpError(400, 'Provide only the bot token.');
+        const token = data.token.trim();
+        if (token.length < 20 || token.length > 200 || /[\s\u0000-\u001f\u007f]/.test(token)) throw new HttpError(400, 'The bot token format is invalid.');
+        let identity;
+        try { identity = await discord('/users/@me', `Bot ${token}`); }
+        catch { throw new HttpError(400, 'Discord could not verify this bot token. Check the Bot Token in your Discord Developer Portal.'); }
+        if (!identity.bot || !identity.id || !identity.username) throw new HttpError(400, 'That token did not identify a Discord bot account.');
+        const count = db.prepare('SELECT COUNT(*) AS count FROM user_bots WHERE owner_id = ?').get(session.user.id).count;
+        if (count >= 5) throw new HttpError(409, 'You can connect up to five personal bots.');
+        const id = randomBytes(16).toString('hex'), now = Date.now();
+        try {
+          db.prepare('INSERT INTO user_bots (id, owner_id, discord_bot_id, username, token_encrypted, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(id, session.user.id, identity.id, identity.username, encrypt(token), now);
+        } catch (error) {
+          if (String(error).includes('UNIQUE')) throw new HttpError(409, 'That Discord bot is already connected to your account.');
+          throw error;
+        }
+        session.selectedBotId = id; persist();
+        return json(res, 201, { bot: { id, discordBotId: identity.id, username: identity.username, createdAt: now }, selectedBotId: id });
+      }
+      if (path === '/api/bots/select' && req.method === 'POST') {
+        const data = await body(req);
+        if (!data || typeof data !== 'object' || Array.isArray(data) || Object.keys(data).length !== 1 || !Object.hasOwn(data, 'id')) throw new HttpError(400, 'Provide a connected bot ID or null for the shared bot.');
+        if (data.id === null && sharedBotConfigured) delete session.selectedBotId;
+        else if (typeof data.id === 'string' && db.prepare('SELECT 1 FROM user_bots WHERE id = ? AND owner_id = ?').get(data.id, session.user.id)) session.selectedBotId = data.id;
+        else throw new HttpError(404, 'Connected bot not found or not available.');
+        persist();
+        return json(res, 200, { selectedBotId: session.selectedBotId || 'shared' });
+      }
+      const connectedBot = /^\/api\/bots\/([a-f0-9]{32})\/delete$/.exec(path);
+      if (connectedBot && req.method === 'POST') {
+        const id = connectedBot[1];
+        const row = db.prepare('SELECT id FROM user_bots WHERE id = ? AND owner_id = ?').get(id, session.user.id);
+        if (!row) throw new HttpError(404, 'Connected bot not found.');
+        db.prepare('DELETE FROM user_bots WHERE id = ? AND owner_id = ?').run(id, session.user.id);
+        db.prepare('DELETE FROM guild_bot_selections WHERE owner_id = ? AND bot_id = ?').run(session.user.id, id);
+        if (session.selectedBotId === id) delete session.selectedBotId;
+        persist();
+        return json(res, 200, { ok: true });
+      }
+      const guildBotMatch = /^\/api\/guilds\/(\d{17,20})\/bot$/.exec(path);
+      if (guildBotMatch) {
+        const guildId = guildBotMatch[1];
+        await authorize(session, guildId);
+        if (req.method === 'GET') {
+          const chosen = selectedBot(session, guildId);
+          const inviteUrl = `https://discord.com/oauth2/authorize?${new URLSearchParams({ client_id: chosen.discordBotId, scope: 'bot', permissions: '268435472' })}`;
+          return json(res, 200, { selectedBotId: chosen.id, inviteUrl });
+        }
+        if (req.method === 'POST') {
+          const data = await body(req);
+          if (!data || typeof data !== 'object' || Array.isArray(data) || Object.keys(data).length !== 1 || typeof data.id !== 'string') throw new HttpError(400, 'Choose a connected bot for this server.');
+          if (data.id === 'shared' && sharedBotConfigured) {
+            db.prepare('INSERT OR REPLACE INTO guild_bot_selections (owner_id, guild_id, bot_id) VALUES (?, ?, ?)').run(session.user.id, guildId, 'shared');
+          } else if (db.prepare('SELECT 1 FROM user_bots WHERE id = ? AND owner_id = ?').get(data.id, session.user.id)) {
+            db.prepare('INSERT OR REPLACE INTO guild_bot_selections (owner_id, guild_id, bot_id) VALUES (?, ?, ?)').run(session.user.id, guildId, data.id);
+          } else throw new HttpError(404, 'Connected bot not found or not available.');
+          return json(res, 200, { selectedBotId: data.id });
+        }
+        throw new HttpError(405, 'Method not allowed.');
+      }
       if (req.method === 'GET' && path === '/api/guilds') return json(res, 200, { guilds: await guilds(session) });
       if (req.method === 'GET' && path === '/api/templates') return json(res, 200, { templates });
       // Personal structures are scoped exclusively to the authenticated Discord account.
@@ -231,7 +315,8 @@ export function createApp(config = {}) {
       }
       if (action === 'status' && req.method === 'GET') {
         const state = await snapshot(session, id);
-        const params = new URLSearchParams({ client_id: env.DISCORD_CLIENT_ID, scope: 'bot', permissions: '268435472', guild_id: id, disable_guild_select: 'true' });
+        const selected = selectedBot(session, id);
+        const params = new URLSearchParams({ client_id: selected.discordBotId, scope: 'bot', permissions: '268435472', guild_id: id, disable_guild_select: 'true' });
         return json(res, 200, { roles: state.roles.length, channels: state.channels.length, inviteUrl: `https://discord.com/oauth2/authorize?${params}` });
       }
       if (action === 'notes') {
@@ -272,7 +357,7 @@ export function createApp(config = {}) {
           return applyPlan(current, (step, parentId) => {
             const path = step.kind === 'role' ? `/guilds/${id}/roles` : `/guilds/${id}/channels`;
             const payload = step.kind === 'role' ? { name: step.name, permissions: '0', mentionable: false } : { name: step.name, type: step.kind === 'category' ? 4 : 0, ...(parentId ? { parent_id: parentId } : {}) };
-            return bot(path, { method: 'POST', headers: { 'X-Audit-Log-Reason': encodeURIComponent(`Chaotic Command setup by ${session.user.id}`) }, body: JSON.stringify(payload) });
+            return bot(session, path, { method: 'POST', headers: { 'X-Audit-Log-Reason': encodeURIComponent(`Chaotic Command setup by ${session.user.id}`) }, body: JSON.stringify(payload) }, id);
           });
         });
         return json(res, 200, result);

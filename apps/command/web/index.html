@@ -1,5 +1,20 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Chaotic Command</title><link rel="stylesheet" href="/style.css"><script type="module" src="/app.js"></script></head><body><main><header><h1>Chaotic Command</h1><p>A real Discord server setup workspace</p></header><p id="message" role="status" aria-live="polite"></p><section id="login" hidden><p id="configuration"></p><a id="signin" class="button" href="/auth/discord">Sign in with Discord</a></section><section id="workspace" hidden><div class="bar"><span id="user"></span><button id="logout">Sign out</button></div><label>Server <select id="guild"><option value="">Choose a server</option></select></label><button id="refresh">Refresh servers</button><p>Only servers where you have Manage Server permission are shown.</p><a id="invite" target="_blank" rel="noopener noreferrer">Install bot in selected server</a><p id="status"></p>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Chaotic Command</title><link rel="stylesheet" href="/style.css"><script type="module" src="/app.js"></script></head><body><main><header><h1>Chaotic Command</h1><p>A real Discord server setup workspace</p></header><p id="message" role="status" aria-live="polite"></p><section id="login" hidden><p id="configuration"></p><a id="signin" class="button" href="/auth/discord">Sign in with Discord</a></section><section id="workspace" hidden><div class="bar"><span id="user"></span><button id="logout">Sign out</button></div>
+<section id="bot-management" aria-labelledby="bot-management-heading">
+  <h2 id="bot-management-heading">Your Discord bots</h2>
+  <p>Connect a bot you created in the Discord Developer Portal. Connect only while using the HTTPS Chaotic Command address. Your token is encrypted before storage and never shown again. Chaotic Command does not create or own your Discord application.</p>
+  <p>Choose a default bot here, or select a server below to assign a different bot to that server. Each server keeps its own bot assignment.</p>
+  <label for="active-bot">Bot to use</label>
+  <select id="active-bot"><option value="">Choose a bot</option></select>
+  <button id="select-bot" type="button">Use selected bot</button>
+  <p id="bot-status" role="status" aria-live="polite"></p>
+  <h3>Connect your own bot</h3>
+  <label for="bot-token">Discord bot token</label>
+  <input id="bot-token" type="password" autocomplete="new-password" maxlength="200" spellcheck="false" placeholder="Paste your bot token">
+  <button id="connect-bot" type="button">Verify and connect bot</button>
+  <button id="remove-bot" type="button">Remove selected personal bot</button>
+  <p>Never share your token with anyone. Removing a bot here deletes its stored credential from Chaotic Command. It does not delete your Discord application or remove the bot from servers.</p>
+</section><label>Server <select id="guild"><option value="">Choose a server</option></select></label><button id="refresh">Refresh servers</button><p>Only servers where you have Manage Server permission are shown.</p><a id="invite" target="_blank" rel="noopener noreferrer">Install bot in selected server</a><p id="status"></p>
 <section id="audit-panel">
   <h2>Existing server audit</h2>
   <p>Run a read-only inventory of the selected server's roles, permissions, categories, and channels. The report does not change Discord or calculate effective member visibility.</p>

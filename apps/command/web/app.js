@@ -25,7 +25,7 @@ async function run(action) {
 function options(el, items, placeholder) {
   el.replaceChildren();
   if (placeholder) el.add(new Option(placeholder, ''));
-  items.forEach(item => el.add(new Option(item.name, item.id)));
+  items.forEach(item => el.add(new Option(item.name || item.username, item.id)));
 }
 function requireGuild() { if (!selected) throw new Error('Choose a server first.'); }
 function customStructure() {
@@ -38,6 +38,60 @@ function customStructure() {
   if (!roles.length) throw new Error('Add at least one role, one role per line.');
   if (!categories.length) throw new Error('Add at least one category using the Category | channel-one, channel-two format.');
   return { roles, categories };
+}
+function updateInviteLink() {
+  if (selected && window.commandInviteBase) $('invite').href = `${window.commandInviteBase}&guild_id=${selected}&disable_guild_select=true`;
+}
+async function refreshBots() {
+  const data = await api('/api/bots');
+  const items = [...data.bots];
+  if (data.sharedBot) items.unshift(data.sharedBot);
+  options($('active-bot'), items, 'Choose a bot');
+  $('active-bot').value = data.selectedBotId || '';
+  const selectedBot = items.find(bot => bot.id === data.selectedBotId);
+  window.commandInviteBase = selectedBot?.inviteUrl || '';
+  updateInviteLink();
+  $('bot-status').textContent = selectedBot
+    ? `Selected: ${selectedBot.username}. Install this bot in a server before running setup.`
+    : 'No bot selected. Connect your own bot to continue.';
+  $('remove-bot').disabled = !data.bots.some(bot => bot.id === data.selectedBotId);
+}
+async function connectBot() {
+  const token = $('bot-token').value;
+  if (!token.trim()) throw new Error('Paste your Discord bot token first.');
+  const result = await api('/api/bots', { token });
+  $('bot-token').value = '';
+  await refreshBots();
+  if (selected) {
+    const assignment = await api(`/api/guilds/${selected}/bot`);
+    $('active-bot').value = assignment.selectedBotId || '';
+    window.commandInviteBase = assignment.inviteUrl || '';
+    updateInviteLink();
+  }
+  $('bot-status').textContent = `Connected and selected ${result.bot.username} as your default bot. Assign it to a server with the selector below.`;
+  message('Your Discord bot was verified and connected. The token is not displayed or returned.');
+}
+async function selectBot() {
+  const id = $('active-bot').value;
+  if (!id) throw new Error('Choose a connected bot first.');
+  if (selected) await api(`/api/guilds/${selected}/bot`, { id });
+  else await api('/api/bots/select', { id: id === 'shared' ? null : id });
+  await refreshBots();
+  if (selected) {
+    const assignment = await api(`/api/guilds/${selected}/bot`);
+    $('active-bot').value = assignment.selectedBotId || '';
+    window.commandInviteBase = assignment.inviteUrl || '';
+    updateInviteLink();
+  }
+  message(selected ? 'Bot assignment saved for this server.' : 'Default bot updated.');
+}
+async function removeBot() {
+  const id = $('active-bot').value;
+  if (!id || id === 'shared') throw new Error('Choose one of your personal bots to remove.');
+  if (!window.confirm('Remove this bot credential from Chaotic Command? This will not delete the Discord application or remove the bot from servers.')) return;
+  await api(`/api/bots/${id}/delete`, {});
+  await refreshBots();
+  message('Stored bot credential removed.');
 }
 async function refreshSavedStructures(selectedId = '') {
   const data = await api('/api/structures');
@@ -164,6 +218,7 @@ async function loadServer() {
   clearPlan(); clearAudit(); selected = $('guild').value; $('notes').value = ''; $('status').textContent = ''; $('invite').removeAttribute('href');
   if (!selected) { message('Choose a server.'); return; }
   const notes = await api(`/api/guilds/${selected}/notes`); $('notes').value = notes.notes;
+  const botChoice = await api(`/api/guilds/${selected}/bot`); $('active-bot').value = botChoice.selectedBotId || ''; window.commandInviteBase = botChoice.inviteUrl || '';
   try {
     const status = await api(`/api/guilds/${selected}/status`);
     $('status').textContent = `Bot ready. ${status.channels} channels and ${status.roles} roles on this server.`;
@@ -203,6 +258,9 @@ $('audit').onclick = () => run(async () => {
   message('Read-only audit complete. No Discord changes have been made.');
 });
 $('refresh').onclick = () => run(loadGuilds);
+$('connect-bot').onclick = () => run(connectBot);
+$('select-bot').onclick = () => run(selectBot);
+$('remove-bot').onclick = () => run(removeBot);
 $('guild').onchange = () => run(loadServer);
 $('template').onchange = showCustomBuilder;
 $('generate-ai-prompt').onclick = () => {
@@ -281,7 +339,7 @@ $('save-notes').onclick = () => run(async () => {
 });
 run(async () => {
   const session = await api('/api/session'); csrf = session.csrf;
-  window.commandInviteBase = session.inviteBase;
+  window.commandInviteBase = '';
   $('login').hidden = Boolean(session.user); $('workspace').hidden = !session.user;
   $('configuration').textContent = session.configured ? 'Sign in to list servers you manage.' : 'The server is running. Configure Discord credentials and SESSION_SECRET in .env, then restart to enable sign-in.';
   $('signin').hidden = !session.configured;
@@ -289,6 +347,7 @@ run(async () => {
   $('user').textContent = `Signed in as ${session.user.username}`;
   options($('template'), (await api('/api/templates')).templates);
   await refreshSavedStructures();
+  await refreshBots();
   $('template').add(new Option('Custom structure', 'custom'));
   await loadGuilds();
 });
