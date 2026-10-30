@@ -50,8 +50,11 @@ const ROLE_PERMISSION_FLAGS = [
 function rolePermissionReview(value) {
   const permissions = BigInt(value || '0');
   if ((permissions & (1n << 3n)) !== 0n) return { flags: ['Administrator (all permissions)'], elevated: true };
+  const knownMask = ROLE_PERMISSION_FLAGS.reduce((mask, [bit]) => mask | bit, 0n);
+  const unknown = (permissions & ~knownMask) !== 0n;
   const flags = ROLE_PERMISSION_FLAGS.filter(([bit]) => (permissions & bit) !== 0n).map(([, name]) => name);
-  return { flags, elevated: ROLE_PERMISSION_FLAGS.some(([bit, , sensitive]) => sensitive && (permissions & bit) !== 0n) };
+  if (unknown) flags.push('Other/unrecognized permissions present');
+  return { flags, elevated: unknown || ROLE_PERMISSION_FLAGS.some(([bit, , sensitive]) => sensitive && (permissions & bit) !== 0n) };
 }
 export function hasPermission(value, bit) {
   const permissions = BigInt(value || '0');
