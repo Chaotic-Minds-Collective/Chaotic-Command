@@ -174,7 +174,7 @@ export function createApp(config = {}) {
         }
         if (typeof data.name !== 'string') throw new HttpError(400, 'Template name must be text.');
         const name = data.name.trim();
-        if (!name || name.length > 60 || /[\\u0000-\\u001f\\u007f]/.test(name)) throw new HttpError(400, 'Template name must contain 1 to 60 valid characters.');
+        if (!name || name.length > 60 || /[\u0000-\u001f\u007f]/.test(name)) throw new HttpError(400, 'Template name must contain 1 to 60 valid characters.');
         const structure = validateStructure(data.structure);
         const count = db.prepare('SELECT COUNT(*) AS count FROM saved_structures WHERE owner_id = ?').get(session.user.id).count;
         if (count >= 20) throw new HttpError(409, 'You can save up to 20 personal structures. Delete one before saving another.');
@@ -185,7 +185,7 @@ export function createApp(config = {}) {
         db.prepare('INSERT INTO saved_structures (id, owner_id, name, structure_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)').run(id, session.user.id, name, JSON.stringify(structure), now, now);
         return json(res, 201, { structure: { id, name, created_at: now, updated_at: now } });
       }
-      const savedMatch = /^\\/api\\/structures\\/([a-f0-9]{32})(?:\\/(rename|delete))?$/.exec(path);
+      const savedMatch = /^\/api\/structures\/([a-f0-9]{32})(?:\/(rename|delete))?$/.exec(path);
       if (savedMatch) {
         const [, structureId, action] = savedMatch;
         const row = db.prepare('SELECT id, owner_id, name, structure_json, created_at, updated_at FROM saved_structures WHERE id = ? AND owner_id = ?').get(structureId, session.user.id);
@@ -200,7 +200,7 @@ export function createApp(config = {}) {
           const data = await body(req);
           if (Object.keys(data).some(key => key !== 'name') || typeof data.name !== 'string') throw new HttpError(400, 'Provide only the new template name.');
           const name = data.name.trim();
-          if (!name || name.length > 60 || /[\\u0000-\\u001f\\u007f]/.test(name)) throw new HttpError(400, 'Template name must contain 1 to 60 valid characters.');
+        if (!name || name.length > 60 || /[\u0000-\u001f\u007f]/.test(name)) throw new HttpError(400, 'Template name must contain 1 to 60 valid characters.');
           if (db.prepare('SELECT 1 FROM saved_structures WHERE owner_id = ? AND name = ? COLLATE NOCASE AND id <> ?').get(session.user.id, name, structureId)) {
             throw new HttpError(409, 'You already have a saved structure with that name.');
           }
