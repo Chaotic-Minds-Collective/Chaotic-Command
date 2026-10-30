@@ -2,6 +2,21 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Chaotic Command</title><link rel="stylesheet" href="/style.css"><script type="module" src="/app.js"></script></head><body><main><header><h1>Chaotic Command</h1><p>A real Discord server setup workspace</p></header><p id="message" role="status" aria-live="polite"></p><section id="login" hidden><p id="configuration"></p><a id="signin" class="button" href="/auth/discord">Sign in with Discord</a></section><section id="workspace" hidden><div class="bar"><span id="user"></span><button id="logout">Sign out</button></div><label>Server <select id="guild"><option value="">Choose a server</option></select></label><button id="refresh">Refresh servers</button><p>Only servers where you have Manage Server permission are shown.</p><a id="invite" target="_blank" rel="noopener noreferrer">Install bot in selected server</a><p id="status"></p><section><h2>Template setup</h2><label>Setup type <select id="template"></select></label>
 <div id="custom-builder" hidden>
   <h3>Build your server structure</h3>
+  <section class="ai-assist" aria-labelledby="ai-assist-title">
+    <h4 id="ai-assist-title">AI-assisted design</h4>
+    <p>Chaotic Command does not connect to an AI provider. Describe your server, copy the generated prompt into ChatGPT or another AI assistant, then paste its JSON response here. Nothing is sent to an AI service automatically.</p>
+    <label for="design-brief">What kind of server are you building?</label>
+    <textarea id="design-brief" rows="3" maxlength="1500" placeholder="A gaming community for friends who play survival games, with event planning and looking-for-group channels."></textarea>
+    <button id="generate-ai-prompt" type="button">Build AI prompt</button>
+    <label for="ai-prompt">Prompt to copy into your AI assistant</label>
+    <textarea id="ai-prompt" rows="9" readonly placeholder="Your structured prompt will appear here."></textarea>
+    <button id="copy-ai-prompt" type="button">Copy prompt</button>
+    <label for="ai-structure-json">Paste the AI-generated JSON structure</label>
+    <textarea id="ai-structure-json" rows="7" placeholder='{"roles":["Member"],"categories":[{"name":"Community","channels":["welcome","general"]}]}'></textarea>
+    <button id="import-ai-structure" type="button">Import JSON into editor</button>
+    <p id="ai-status" role="status" aria-live="polite"></p>
+  </section>
+  <h4>Review and edit the structure</h4>
   <p>Enter one role name per line. Existing exact matches will be reused without changing permissions. New roles receive zero permissions and are not assigned.</p>
   <label for="custom-roles">Roles</label>
   <textarea id="custom-roles" rows="4" maxlength="2000" placeholder="Member&#10;Moderator&#10;Event Host"></textarea>
