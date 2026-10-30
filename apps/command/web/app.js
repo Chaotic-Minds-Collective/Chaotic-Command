@@ -39,6 +39,43 @@ function customStructure() {
   if (!categories.length) throw new Error('Add at least one category using the Category | channel-one, channel-two format.');
   return { roles, categories };
 }
+async function refreshBots() {
+  const data = await api('/api/bots');
+  const items = [...data.bots];
+  if (data.sharedBot) items.unshift(data.sharedBot);
+  options($('active-bot'), items, 'Choose a bot');
+  $('active-bot').value = data.selectedBotId || '';
+  const selectedBot = items.find(bot => bot.id === data.selectedBotId);
+  window.commandInviteBase = selectedBot?.inviteUrl || '';
+  $('bot-status').textContent = selectedBot
+    ? `Selected: ${selectedBot.username}. Install this bot in a server before running setup.`
+    : 'No bot selected. Connect your own bot to continue.';
+  $('remove-bot').disabled = !data.bots.some(bot => bot.id === data.selectedBotId);
+}
+async function connectBot() {
+  const token = $('bot-token').value;
+  if (!token.trim()) throw new Error('Paste your Discord bot token first.');
+  const result = await api('/api/bots', { token });
+  $('bot-token').value = '';
+  await refreshBots();
+  $('bot-status').textContent = `Connected and selected ${result.bot.username}. Install it in your server before setup.`;
+  message('Your Discord bot was verified and connected. The token is not displayed or returned.');
+}
+async function selectBot() {
+  const id = $('active-bot').value;
+  if (!id) throw new Error('Choose a connected bot first.');
+  await api('/api/bots/select', { id: id === 'shared' ? null : id });
+  await refreshBots();
+  message('Selected bot updated.');
+}
+async function removeBot() {
+  const id = $('active-bot').value;
+  if (!id || id === 'shared') throw new Error('Choose one of your personal bots to remove.');
+  if (!window.confirm('Remove this bot credential from Chaotic Command? This will not delete the Discord application or remove the bot from servers.')) return;
+  await api(`/api/bots/${id}/delete`, {});
+  await refreshBots();
+  message('Stored bot credential removed.');
+}
 async function refreshSavedStructures(selectedId = '') {
   const data = await api('/api/structures');
   options($('saved-structures'), data.structures, 'Choose a saved structure');
@@ -86,6 +123,7 @@ async function deleteSavedStructure() {
   await api(`/api/structures/${id}/delete`, {});
   $('saved-structure-name').value = '';
   await refreshSavedStructures();
+  await refreshBots();
   $('saved-structure-status').textContent = 'Saved personal structure deleted. No Discord server was changed.';
   message('Personal structure deleted.');
 }
@@ -203,6 +241,9 @@ $('audit').onclick = () => run(async () => {
   message('Read-only audit complete. No Discord changes have been made.');
 });
 $('refresh').onclick = () => run(loadGuilds);
+$('connect-bot').onclick = () => run(connectBot);
+$('select-bot').onclick = () => run(selectBot);
+$('remove-bot').onclick = () => run(removeBot);
 $('guild').onchange = () => run(loadServer);
 $('template').onchange = showCustomBuilder;
 $('generate-ai-prompt').onclick = () => {
@@ -281,7 +322,7 @@ $('save-notes').onclick = () => run(async () => {
 });
 run(async () => {
   const session = await api('/api/session'); csrf = session.csrf;
-  window.commandInviteBase = session.inviteBase;
+  window.commandInviteBase = '';
   $('login').hidden = Boolean(session.user); $('workspace').hidden = !session.user;
   $('configuration').textContent = session.configured ? 'Sign in to list servers you manage.' : 'The server is running. Configure Discord credentials and SESSION_SECRET in .env, then restart to enable sign-in.';
   $('signin').hidden = !session.configured;
