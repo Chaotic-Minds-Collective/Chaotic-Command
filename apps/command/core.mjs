@@ -8,6 +8,31 @@ export const templates = [
   { id: 'gaming', name: 'Gaming', roles: ['Member', 'Player'], categories: [{ name: 'Gaming', channels: ['announcements', 'general', 'looking-for-group', 'game-chat'] }] },
   { id: 'support', name: 'Support', roles: ['Member', 'Support'], categories: [{ name: 'Support', channels: ['welcome', 'help', 'knowledge-base'] }] }
 ];
+const ROLE_PERMISSION_FLAGS = [
+  [1n << 3n, 'Administrator', true],
+  [1n << 1n, 'Kick Members', true],
+  [1n << 2n, 'Ban Members', true],
+  [1n << 4n, 'Manage Channels', true],
+  [1n << 5n, 'Manage Server', true],
+  [1n << 7n, 'View Audit Log', false],
+  [1n << 13n, 'Manage Messages', true],
+  [1n << 17n, 'Mention Everyone', true],
+  [1n << 22n, 'Mute Members', true],
+  [1n << 23n, 'Deafen Members', true],
+  [1n << 24n, 'Move Members', true],
+  [1n << 28n, 'Manage Roles', true],
+  [1n << 29n, 'Manage Webhooks', true],
+  [1n << 30n, 'Manage Expressions', true],
+  [1n << 33n, 'Manage Events', true],
+  [1n << 34n, 'Manage Threads', true],
+  [1n << 40n, 'Moderate Members', true]
+];
+function rolePermissionReview(value) {
+  const permissions = BigInt(value || '0');
+  if ((permissions & (1n << 3n)) !== 0n) return { flags: ['Administrator (all permissions)'], elevated: true };
+  const flags = ROLE_PERMISSION_FLAGS.filter(([bit]) => (permissions & bit) !== 0n).map(([, name]) => name);
+  return { flags, elevated: ROLE_PERMISSION_FLAGS.some(([bit, , sensitive]) => sensitive && (permissions & bit) !== 0n) };
+}
 export function hasPermission(value, bit) {
   const permissions = BigInt(value || '0');
   return (permissions & 8n) !== 0n || (permissions & BigInt(bit)) !== 0n;
@@ -16,7 +41,7 @@ export function canManage(guild) {
   return Boolean(guild.owner || hasPermission(guild.permissions, 32n));
 }
 export function validateId(id) {
-  if (!/^\d{17,20}$/.test(id)) throw new HttpError(400, 'Invalid Discord server ID.');
+  if (!/^\\d{17,20}$/.test(id)) throw new HttpError(400, 'Invalid Discord server ID.');
   return id;
 }
 function unique(items, predicate, label) {
@@ -32,7 +57,8 @@ export function makePlan(templateId, roles, channels) {
   for (const name of template.roles) {
     const existing = unique(roles, r => r.name === name, `role ${name}`);
     if (existing?.managed) throw new HttpError(409, `Role ${name} is managed by an integration. Rename it or choose another template.`);
-    steps.push({ kind: 'role', name, existingId: existing?.id || null });
+    const review = existing ? rolePermissionReview(existing.permissions) : { flags: [], elevated: false };
+    steps.push({ kind: 'role', name, existingId: existing?.id || null, existingPermissions: existing ? String(existing.permissions || '0') : null, permissionFlags: review.flags, elevatedPermissions: review.elevated });
   }
   for (const category of template.categories) {
     const existing = unique(channels, c => c.type === 4 && c.name === category.name, `category ${category.name}`);
