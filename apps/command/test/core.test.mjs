@@ -54,7 +54,7 @@ test('same-server concurrent operations are blocked and lock releases on failure
 test('existing role permissions are included in preview and privileged roles are flagged', () => {
   const safe = makePlan('community', [{ id: 'safe', name: 'Member', permissions: '1024' }], []);
   assert.equal(safe.steps[0].existingPermissions, '1024');
-  assert.deepEqual(safe.steps[0].permissionFlags, []);
+  assert.deepEqual(safe.steps[0].permissionFlags, ['View Channels']);
   assert.equal(safe.steps[0].elevatedPermissions, false);
   const risky = makePlan('community', [{ id: 'admin', name: 'Member', permissions: '8' }], []);
   assert.deepEqual(risky.steps[0].permissionFlags, ['Administrator (all permissions)']);
