@@ -24,6 +24,22 @@ function options(el, items, placeholder) {
   items.forEach(item => el.add(new Option(item.name, item.id)));
 }
 function requireGuild() { if (!selected) throw new Error('Choose a server first.'); }
+function customStructure() {
+  const roles = $('custom-roles').value.split('\n').map(value => value.trim()).filter(Boolean);
+  const categories = $('custom-categories').value.split('\n').map(line => line.trim()).filter(Boolean).map((line, index) => {
+    const separator = line.indexOf('|');
+    if (separator < 1) throw new Error(`Category line ${index + 1} must use: Category name | channel-one, channel-two`);
+    return { name: line.slice(0, separator).trim(), channels: line.slice(separator + 1).split(',').map(value => value.trim()).filter(Boolean) };
+  });
+  if (!roles.length) throw new Error('Add at least one role, one role per line.');
+  if (!categories.length) throw new Error('Add at least one category using the Category | channel-one, channel-two format.');
+  return { roles, categories };
+}
+function showCustomBuilder() {
+  const custom = $('template').value === 'custom';
+  $('custom-builder').hidden = !custom;
+  clearPlan();
+}
 async function loadGuilds() {
   clearPlan(); selected = ''; $('notes').value = ''; $('status').textContent = ''; $('invite').removeAttribute('href');
   const data = await api('/api/guilds');
@@ -48,14 +64,17 @@ async function loadServer() {
 }
 $('refresh').onclick = () => run(loadGuilds);
 $('guild').onchange = () => run(loadServer);
-$('template').onchange = clearPlan;
+$('template').onchange = showCustomBuilder;
+$('custom-roles').oninput = clearPlan;
+$('custom-categories').oninput = clearPlan;
 $('logout').onclick = () => run(async () => {
   if (!window.confirm('Sign out of Chaotic Command?')) { message('Sign-out cancelled.'); return; }
   await api('/api/logout', {}); location.reload();
 });
 $('preview').onclick = () => run(async () => {
   requireGuild(); clearPlan();
-  plan = await api(`/api/guilds/${selected}/preview`, { templateId: $('template').value });
+  const request = $('template').value === 'custom' ? { structure: customStructure() } : { templateId: $('template').value };
+  plan = await api(`/api/guilds/${selected}/preview`, request);
   $('steps').replaceChildren(...plan.steps.map(step => {
     const li = document.createElement('li');
     li.textContent = `${step.existingId ? 'Reuse' : 'Create'} ${step.kind}: ${step.name}${step.category ? ` (in ${step.category})` : ''}`;
@@ -100,5 +119,6 @@ run(async () => {
   if (!session.user) { message('Not connected to Discord.'); return; }
   $('user').textContent = `Signed in as ${session.user.username}`;
   options($('template'), (await api('/api/templates')).templates);
+  $('template').add(new Option('Custom structure', 'custom'));
   await loadGuilds();
 });

@@ -32,7 +32,7 @@ Open http://localhost:3000. Without credentials, the UI explains configuration a
 
 - Real Discord OAuth with expiring state, session rotation, HttpOnly/SameSite cookies, server-side tokens, AES-256-GCM encrypted sessions, and logout.
 - Live manageable-server listing, fresh authorization on every server operation, bot permission preflight, and server role/channel counts.
-- Additive community/gaming/support templates. New roles receive **zero permissions** and are not assigned to members. Existing roles are reused without changing their permissions; existing exact-match channels are reused only within the matching category. New channels inherit category/server visibility and may be public; these templates are not a security configuration.
+- Additive community/gaming/support templates plus user-authored custom role/category/channel structures. Custom plans are validated and use the same preview/apply engine. New roles receive **zero permissions** and are not assigned to members. Existing roles are reused without changing their permissions; existing exact-match channels are reused only within the matching category. New channels inherit category/server visibility and may be public; these templates are not a security configuration.
 - Expiring, single-use, server-bound previews; changed-plan rejection; sequential writes, bounded Discord rate-limit retries, timeouts, per-server concurrency locks and partial-progress reports. A retry requires a new preview and reuses exact matches. No deletion, rollback, moderation actions or messages are sent.
 - Shared server notes persisted in SQLite and restricted to current server managers. Notes do not activate automations.
 
@@ -46,6 +46,6 @@ Discord operations are not transactional. API failures may leave some created ob
 
 ## Scope and original workspace
 
-This is a functional setup foundation, **not a completed AI Discord controller**. AI generation, ticket systems, moderation, member onboarding, welcome messages, role assignment, private-channel permission setup, and long-running Gateway automations are not implemented. No UI switch pretends to enable these systems.
+This is a functional setup foundation, **not a completed AI Discord controller**. AI generation, ticket systems, moderation, member onboarding, welcome messages, role assignment, private-channel permission setup, and long-running Gateway automations are not implemented. Custom structures are currently entered manually; no AI provider is connected. No UI switch pretends to enable these systems.
 
 The original component design workspace remains under `guildpilot/`, `design/`, `.bitmap`, `workspace.jsonc`, and `pnpm-lock.yaml`. Its pages are mock prototypes and are intentionally not used by this standalone runtime. Continue using Bit tooling for those components; the root start/test scripts target only `apps/command`. This repair does not publish Bit components or modify their versions.

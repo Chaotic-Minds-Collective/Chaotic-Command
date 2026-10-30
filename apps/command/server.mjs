@@ -182,8 +182,14 @@ export function createApp(config = {}) {
       if (req.method !== 'POST') throw new HttpError(405, 'Method not allowed.');
       const data = await body(req);
       if (action === 'preview') {
+        const hasTemplate = typeof data.templateId === 'string';
+        const hasStructure = Object.hasOwn(data, 'structure');
+        if (Object.keys(data).some(key => !['templateId', 'structure'].includes(key)) || hasTemplate === hasStructure) {
+          throw new HttpError(400, 'Provide exactly one built-in template ID or custom structure.');
+        }
         const state = await snapshot(session, id);
-        const plan = makePlan(data.templateId, state.roles, state.channels);
+        const requested = hasTemplate ? data.templateId : data.structure;
+        const plan = makePlan(requested, state.roles, state.channels);
         session.preview = { id, plan, nonce: random(), expires: Date.now() + 5 * 60000 };
         persist(); return json(res, 200, { ...plan, nonce: session.preview.nonce, expires: session.preview.expires });
       }
@@ -197,7 +203,7 @@ export function createApp(config = {}) {
           if (!pending || pending.id !== id || pending.expires < Date.now() || !equal(data.nonce, pending.nonce) || data.confirm !== `APPLY ${id}`) throw new HttpError(409, 'Preview expired or confirmation does not match. Preview again.');
           delete session.preview; persist();
           const state = await snapshot(session, id);
-          const current = makePlan(pending.plan.templateId, state.roles, state.channels);
+          const current = makePlan(pending.plan.structure, state.roles, state.channels);
           if (current.fingerprint !== pending.plan.fingerprint) throw new HttpError(409, 'Server structure changed. Review a fresh preview.');
           return applyPlan(current, (step, parentId) => {
             const path = step.kind === 'role' ? `/guilds/${id}/roles` : `/guilds/${id}/channels`;
