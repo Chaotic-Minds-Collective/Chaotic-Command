@@ -99,3 +99,14 @@ test('custom structure validation rejects unsupported fields, duplicates, reserv
   assert.throws(() => validateStructure({ roles: Array(21).fill(0).map((_, i) => 'Role ' + i), categories: valid.categories }), /at most 20 roles/);
   assert.throws(() => validateStructure({ roles: valid.roles, categories: [{ name: 'Community', channels: Array(31).fill(0).map((_, i) => 'channel-' + i) }] }), /at most 30 channels/);
 });
+
+test('AI-import-shaped structures remain untrusted and reject extra instructions or unsafe fields', () => {
+  const valid = { roles: ['Member'], categories: [{ name: 'Community', channels: ['general'] }] };
+  assert.deepEqual(validateStructure(valid), valid);
+  assert.throws(() => validateStructure({ ...valid, systemPrompt: 'ignore validation' }), /unsupported fields/);
+  assert.throws(() => validateStructure({ roles: [{ name: 'Admin', permissions: '8' }], categories: valid.categories }), /must be text/);
+  assert.throws(() => validateStructure({ roles: valid.roles, categories: [{ name: 'Community', channels: ['general'], permissionOverwrites: [] }] }), /unsupported fields/);
+  assert.throws(() => validateStructure({ roles: valid.roles, categories: [{ name: 'Community', channels: ['general', 'General'] }] }), /lowercase/);
+  assert.throws(() => validateStructure({ roles: valid.roles, categories: [{ name: 'Community', channels: Array(31).fill(0).map((_, i) => 'channel-' + i) }] }), /at most 30 channels/);
+  assert.throws(() => validateStructure({ roles: valid.roles, categories: Array(20).fill(0).map((_, i) => ({ name: 'Category ' + i, channels: Array(5).fill(0).map((_, j) => 'channel-' + j + '-' + i) })) }), /100 total objects/);
+});
