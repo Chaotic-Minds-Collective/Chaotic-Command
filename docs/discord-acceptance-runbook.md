@@ -6,16 +6,17 @@ Use this runbook to configure a local Chaotic Command instance and verify its li
 
 ## 1. What you are testing
 
-The current MVP is a single-operator deployment:
+The current MVP supports a shared operator bot and customer-owned bots:
 
-- The operator configures one Discord application and one bot token on the Chaotic Command server.
-- Users sign in with their own Discord accounts through OAuth.
-- Users can manage only servers where their account owns the server or has Manage Server permission.
-- The configured Chaotic Command bot must be installed in the selected server.
-- The bot requires Manage Channels and Manage Roles. It does not need Administrator or privileged Gateway intents.
+- The operator configures one Discord application for Chaotic Command OAuth sign-in.
+- The shared `DISCORD_BOT_TOKEN` is optional. If configured, it remains available as a shared bot.
+- Signed-in customers can connect up to five personal Discord bots. Chaotic Command verifies each bot token with Discord and stores it encrypted at rest.
+- Customers can set a default personal bot and assign a different connected bot to an individual server.
+- Users sign in with their own Discord accounts and can manage only servers where their account owns the server or has Manage Server permission.
+- The selected bot must be installed in the selected server and have Manage Channels and Manage Roles. It does not need Administrator or privileged Gateway intents.
 - The app creates roles, categories, and text channels from a reviewed plan. It does not delete objects, change permissions on reused roles, assign roles, post messages, or configure private-channel access.
 
-**Bring-your-own-bot is not implemented.** Customers cannot currently register a separate bot, enter their own bot token, or connect a per-customer bot through the UI. Do not ask customers to send bot tokens to the operator.
+The operator's OAuth application is separate from each customer's personal bot. Customers do not need to create an OAuth client secret or redirect URL for their personal bot. Never ask customers to send bot tokens to the operator.
 
 ## 2. Safety rules
 
@@ -54,10 +55,10 @@ Record that this is the disposable test server. Do not record or publish its ser
 5. Save the redirect URL.
 6. Copy the **Application ID**. This becomes `DISCORD_CLIENT_ID`.
 7. Under OAuth2, reveal or reset the **Client Secret** and copy it into the local `.env` file as `DISCORD_CLIENT_SECRET`.
-8. Open the **Bot** section and add the application bot if the portal has not already created one.
-9. Reset or reveal the bot token and copy it directly into the local `.env` file as `DISCORD_BOT_TOKEN`.
-10. Keep the token private. Do not paste it into a terminal command, browser field, issue, chat, or source file.
-11. Do not enable privileged Gateway intents. The current MVP uses Discord REST requests and does not require them.
+8. Do not create a bot token for this OAuth application unless you also want to test the optional shared-bot path.
+9. Do not enable privileged Gateway intents. The app uses Discord REST requests and does not require them.
+
+The operator's OAuth application is used for user sign-in and server listing. Customer-owned bots are created separately and connected through the Chaotic Command UI.
 
 The app's sign-in flow uses the `identify` and `guilds` OAuth scopes. Its bot installation link uses the `bot` scope with Manage Channels and Manage Roles permissions.
 
@@ -100,6 +101,8 @@ NODE_ENV=development
 
 Replace each example value locally. Do not include quotation marks unless your local environment requires them. Do not share the completed file.
 
+`DISCORD_BOT_TOKEN` is optional. Set it only if you are testing the operator-provided shared bot. Customer-owned bots are connected after signing in through the app; their tokens are not placed in the operator's `.env` file.
+
 Generate a random session secret using Node.js:
 
 ```bash
@@ -137,20 +140,44 @@ The local server binds to loopback by default. Do not expose this development in
 
 **Pass condition:** OAuth completes, the correct account is shown, and only servers the account can manage are offered.
 
-## 7. Install and verify the configured bot
+## 7. Install and verify a selected bot
 
 1. Select the disposable test server.
-2. If the bot is not installed, use the installation link displayed by Chaotic Command.
-3. On Discord's authorization screen, inspect the requested permissions.
-4. Confirm the bot requests Manage Channels and Manage Roles, not Administrator.
-5. Authorize it for the disposable server.
-6. In Discord server settings, open the role list and move the bot's role above the roles the app will create.
-7. Return to Chaotic Command and reselect the test server.
-8. Confirm bot readiness succeeds.
+2. Choose the shared test bot if you configured one, or select a connected personal test bot after completing section 8.
+3. If the selected bot is not installed, use **Install bot in selected server**.
+4. On Discord's authorization screen, inspect the requested permissions.
+5. Confirm the bot requests Manage Channels and Manage Roles, not Administrator.
+6. Authorize it for the disposable server.
+7. In Discord server settings, open the role list and move the bot's role above the roles the app will create.
+8. Return to Chaotic Command and reselect the test server.
+9. Confirm bot readiness succeeds.
 
-If readiness fails, check that the bot is in the correct server, that both permissions are enabled, and that the bot role is high enough in the role hierarchy. Do not grant Administrator as a workaround.
+If readiness fails, check that the selected bot is installed in the correct server, that both permissions are enabled, and that the bot role is high enough in the role hierarchy. Do not grant Administrator as a workaround.
 
-## 8. Test the read-only server audit
+## 8. Test customer-owned bot connection and assignment
+
+Use a separate temporary Discord application and bot for this section. Keep the bot token private and enter it only in the Chaotic Command connection form over HTTPS. Do not place a customer bot token in the operator's `.env` file.
+
+1. In the Discord Developer Portal, create a test application and open its **Bot** page.
+2. Create or add the bot user, generate a bot token, and keep the token private.
+3. Sign in to the local Chaotic Command instance with the test Discord account.
+4. Find **Your Discord bots**, paste the test bot token into **Discord bot token**, and select **Verify and connect bot**.
+5. Confirm the bot appears in the list with identity metadata only. Confirm the token is not displayed in the page or API response.
+6. Confirm the connected bot becomes the default bot.
+7. Connect a second temporary bot if available and confirm both are listed. Verify the five-bot account limit with validation or tests rather than creating unnecessary credentials.
+8. Select the disposable server, choose the first bot, and select **Use selected bot**.
+9. Install the selected bot using its installation link. Confirm the link identifies that bot's application and requests Manage Channels and Manage Roles only.
+10. Confirm bot readiness succeeds after installation.
+11. If a second disposable server is available, assign the second bot to it. Confirm changing the default does not overwrite either server-specific assignment.
+12. If a second test Discord account is available, confirm it cannot list, select, assign, or delete the first account's connected bots.
+13. Remove one test bot from **Your Discord bots**. Confirm its stored credential and that account's assignments are removed.
+14. Confirm removal does not call Discord to revoke the token or remove the bot from the server. Reset the token in the Developer Portal and remove the bot from the disposable server during cleanup.
+
+**Pass condition:** Bot credentials are verified, stored encrypted, never returned to the browser, and all bot records and server assignments remain scoped to the authenticated account.
+
+Do not use real customer tokens or production servers for acceptance testing. Automated tests cover account isolation and encryption, but live token verification and installation still require this disposable test.
+
+## 10. Test the read-only server audit
 
 1. Select the disposable server.
 2. Run **Audit selected server**.
@@ -187,7 +214,7 @@ If readiness fails, check that the bot is in the correct server, that both permi
 
 Do not apply a plan while an unexpectedly privileged role is present.
 
-## 10. Test stale-preview rejection
+## 11. Test stale-preview rejection
 
 1. Generate a fresh preview.
 2. Before applying, change the permissions on the existing test Member role directly in Discord.
@@ -198,7 +225,7 @@ Do not apply a plan while an unexpectedly privileged role is present.
 
 **Pass condition:** A preview cannot be applied after the server state used to create it has changed.
 
-## 11. Test apply, reuse, and partial progress handling
+## 12. Test apply, reuse, and partial progress handling
 
 1. Restore the test Member role to the intended permissions.
 2. Generate a fresh Community preview.
@@ -216,7 +243,7 @@ Do not apply a plan while an unexpectedly privileged role is present.
 
 If an apply operation fails partway through, do not assume nothing changed. Inspect the partial-progress report and the Discord server, then create a fresh preview before retrying.
 
-## 12. Test custom structures
+## 13. Test custom structures
 
 1. Open the custom structure editor.
 2. Enter at least one role and one category with text channels.
@@ -234,7 +261,7 @@ If an apply operation fails partway through, do not assume nothing changed. Insp
 
 Do not apply every test structure. Use preview and validation to test invalid cases without writing to Discord.
 
-## 13. Test AI-assisted structure handoff
+## 14. Test AI-assisted structure handoff
 
 1. Open the AI-assisted design section of the custom structure workflow.
 2. Enter a non-sensitive test brief.
@@ -251,7 +278,7 @@ Do not apply every test structure. Use preview and validation to test invalid ca
 
 The app does not call an AI provider, store an AI provider key, or automatically send your brief to an external service. Do not include secrets or private member information in the prompt.
 
-## 14. Test personal saved structures
+## 15. Test personal saved structures
 
 1. Sign in with the first test Discord account.
 2. Create a valid custom structure.
@@ -266,7 +293,7 @@ The app does not call an AI provider, store an AI provider key, or automatically
 
 **Pass condition:** Saved structures remain private to the Discord account that created them, and load operations only populate the editor.
 
-## 15. Test shared server notes
+## 16. Test shared server notes
 
 1. Save a short, non-sensitive note for the disposable server.
 2. Refresh the page and confirm the note persists.
@@ -277,7 +304,7 @@ The app does not call an AI provider, store an AI provider key, or automatically
 
 Notes are stored as plaintext in the local SQLite database. Never put passwords, bot tokens, client secrets, or other credentials in notes.
 
-## 16. Record results
+## 17. Record results
 
 Record:
 
@@ -291,7 +318,7 @@ Record:
 
 Do not attach the `.env` file, SQLite database, raw OAuth responses, or unredacted screenshots to the report.
 
-## 17. Cleanup
+## 18. Cleanup
 
 1. Stop the local Node.js process.
 2. Delete the disposable Discord test server when the test is complete.
@@ -301,7 +328,7 @@ Do not attach the `.env` file, SQLite database, raw OAuth responses, or unredact
 6. Confirm no test credentials were committed to Git or copied into logs.
 7. Confirm the local test server is stopped and is not publicly reachable.
 
-## 18. Deployment gate
+## 19. Deployment gate
 
 A successful acceptance test is not permission to deploy. Before any public deployment, separately review:
 
