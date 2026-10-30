@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { makePlan, canManage, hasPermission, validateId, applyPlan, createGuildLock } from '../core.mjs';
+import { makePlan, validateStructure, canManage, hasPermission, validateId, applyPlan, createGuildLock } from '../core.mjs';
 
 test('server permissions use BigInt, support owner/admin, and reject ordinary members', () => {
   assert.equal(canManage({ permissions: '32' }), true);
@@ -71,4 +71,31 @@ test('permission changes alter the preview fingerprint and unknown bits are flag
   const unknown = makePlan('community', [{ id: 'member', name: 'Member', permissions: String(1n << 45n) }], []);
   assert.deepEqual(unknown.steps[0].permissionFlags, ['Other/unrecognized permissions present']);
   assert.equal(unknown.steps[0].elevatedPermissions, true);
+});
+
+test('custom structures normalize and create additive plans using the same planner', () => {
+  const structure = { roles: ['Member', 'Event Host'], categories: [{ name: 'Community', channels: ['welcome', 'general-chat'] }, { name: 'Events', channels: ['announcements'] }] };
+  const normalized = validateStructure(structure);
+  assert.deepEqual(normalized, structure);
+  const plan = makePlan(structure, [{ id: 'member-id', name: 'Member', permissions: '1024' }], [{ id: 'category-id', name: 'Community', type: 4 }, { id: 'channel-id', name: 'welcome', type: 0, parent_id: 'category-id' }]);
+  assert.equal(plan.templateId, null);
+  assert.deepEqual(plan.structure, structure);
+  assert.equal(plan.steps.find(step => step.kind === 'role' && step.name === 'Member').action, undefined);
+  assert.equal(plan.steps.find(step => step.kind === 'role' && step.name === 'Member').existingId, 'member-id');
+  assert.equal(plan.steps.find(step => step.kind === 'role' && step.name === 'Event Host').existingId, null);
+  assert.equal(plan.steps.find(step => step.kind === 'channel' && step.name === 'welcome').existingId, 'channel-id');
+  assert.equal(plan.steps.filter(step => step.existingId === null).length, 4);
+  assert.equal(plan.fingerprint, makePlan(structure, [{ id: 'member-id', name: 'Member', permissions: '1024' }], [{ id: 'category-id', name: 'Community', type: 4 }, { id: 'channel-id', name: 'welcome', type: 0, parent_id: 'category-id' }]).fingerprint);
+});
+
+test('custom structure validation rejects unsupported fields, duplicates, reserved roles and unsafe channel names', () => {
+  const valid = { roles: ['Member'], categories: [{ name: 'Community', channels: ['general'] }] };
+  assert.throws(() => validateStructure({ ...valid, permissions: '8' }), /unsupported fields/);
+  assert.throws(() => validateStructure({ roles: ['Member', 'member'], categories: valid.categories }), /unique/);
+  assert.throws(() => validateStructure({ roles: ['@everyone'], categories: valid.categories }), /managed by Discord/);
+  assert.throws(() => validateStructure({ roles: valid.roles, categories: [{ name: 'Community', channels: ['General'] }] }), /lowercase/);
+  assert.throws(() => validateStructure({ roles: valid.roles, categories: [{ name: 'Community', channels: ['general', 'general'] }] }), /duplicate/);
+  assert.throws(() => validateStructure({ roles: [], categories: [] }), /1 to 20 categories/);
+  assert.throws(() => validateStructure({ roles: Array(21).fill(0).map((_, i) => 'Role ' + i), categories: valid.categories }), /at most 20 roles/);
+  assert.throws(() => validateStructure({ roles: valid.roles, categories: [{ name: 'Community', channels: Array(31).fill(0).map((_, i) => 'channel-' + i) }] }), /at most 30 channels/);
 });
