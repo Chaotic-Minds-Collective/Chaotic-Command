@@ -169,6 +169,7 @@ export function createApp(config = {}) {
       }
       if (path === '/api/structures' && req.method === 'POST') {
         const data = await body(req);
+        if (!data || typeof data !== 'object' || Array.isArray(data)) throw new HttpError(400, 'Template data must be an object.');
         if (Object.keys(data).some(key => !['name', 'structure'].includes(key)) || !Object.hasOwn(data, 'name') || !Object.hasOwn(data, 'structure')) {
           throw new HttpError(400, 'Provide only a template name and structure.');
         }
@@ -198,6 +199,7 @@ export function createApp(config = {}) {
         }
         if (req.method === 'POST' && action === 'rename') {
           const data = await body(req);
+          if (!data || typeof data !== 'object' || Array.isArray(data)) throw new HttpError(400, 'Template name must be an object field.');
           if (Object.keys(data).some(key => key !== 'name') || typeof data.name !== 'string') throw new HttpError(400, 'Provide only the new template name.');
           const name = data.name.trim();
         if (!name || name.length > 60 || /[\u0000-\u001f\u007f]/.test(name)) throw new HttpError(400, 'Template name must contain 1 to 60 valid characters.');
