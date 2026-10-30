@@ -196,7 +196,7 @@ Do not use real customer tokens or production servers for acceptance testing. Au
 
 **Pass condition:** The audit reports the supported structural findings and performs reads only.
 
-## 9. Test built-in template preview and role review
+## 10. Test built-in template preview and role review
 
 1. Select the Community template.
 2. Select the preview action.
