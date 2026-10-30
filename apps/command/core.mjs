@@ -272,7 +272,24 @@ export function makePlan(templateOrStructure, roles, channels) {
     }
   }
   const templateId = template?.id || null;
-  return { templateId, structure, steps, fingerprint: createHash('sha256').update(JSON.stringify({ structure, steps })).digest('hex') };
+  // Bind confirmation to permission context as well as proposed names/IDs.
+  // Normalize list order so Discord response ordering cannot invalidate a preview.
+  const byId = (a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+  const context = {
+    roles: roles.map(role => ({
+      id: String(role.id), name: role.name, permissions: String(role.permissions || '0'),
+      managed: Boolean(role.managed), position: role.position ?? 0
+    })).sort(byId),
+    channels: channels.map(channel => ({
+      id: String(channel.id), name: channel.name, type: channel.type,
+      parentId: channel.parent_id || null, position: channel.position ?? 0,
+      overwrites: (channel.permission_overwrites || []).map(overwrite => ({
+        id: String(overwrite.id), type: overwrite.type,
+        allow: String(overwrite.allow || '0'), deny: String(overwrite.deny || '0')
+      })).sort((a, b) => a.type - b.type || byId(a, b))
+    })).sort(byId)
+  };
+  return { templateId, structure, steps, fingerprint: createHash('sha256').update(JSON.stringify({ structure, steps, context })).digest('hex') };
 }
 /** Serialize writes per server; retries re-read Discord and reuse successful partial work. */
 export function createGuildLock() {

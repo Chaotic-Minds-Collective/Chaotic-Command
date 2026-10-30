@@ -77,7 +77,7 @@ export function createApp(config = {}) {
     }
     throw new HttpError(409, 'Connect your own Discord bot or select an available bot before continuing.');
   };
-  const bot = (session, path, options, guildId) => discord(path, `Bot ${selectedBot(session, guildId).token}`, options);
+  const bot = (chosen, path, options) => discord(path, `Bot ${chosen.token}`, options);
   async function guilds(session) {
     if (!session.user || session.tokenExpires <= Date.now()) throw new HttpError(401, 'Sign in with Discord again.');
     const result = [];
@@ -96,13 +96,14 @@ export function createApp(config = {}) {
     if (!guild) throw new HttpError(403, 'You need Manage Server permission for this server.');
     return guild;
   }
-  async function snapshot(session, id) {
+  async function snapshot(session, id, chosen) {
     await authorize(session, id);
-    const [roles, channels, me] = await Promise.all([bot(session, `/guilds/${id}/roles`, undefined, id), bot(session, `/guilds/${id}/channels`, undefined, id), bot(session, '/users/@me', undefined, id)]);
-    const member = await bot(session, `/guilds/${id}/members/${me.id}`, undefined, id);
+    chosen ||= selectedBot(session, id);
+    const [roles, channels, me] = await Promise.all([bot(chosen, `/guilds/${id}/roles`), bot(chosen, `/guilds/${id}/channels`), bot(chosen, '/users/@me')]);
+    const member = await bot(chosen, `/guilds/${id}/members/${me.id}`);
     const permissions = roles.filter(r => r.id === id || member.roles.includes(r.id)).reduce((p, r) => p | BigInt(r.permissions), 0n);
     if (!hasPermission(permissions, 16n) || !hasPermission(permissions, 268435456n)) throw new HttpError(403, 'Bot needs Manage Channels and Manage Roles. Place its role above roles it creates.');
-    return { roles, channels };
+    return { roles, channels, bot: chosen };
   }
   async function body(req) {
     let text = '';
@@ -315,7 +316,7 @@ export function createApp(config = {}) {
       }
       if (action === 'status' && req.method === 'GET') {
         const state = await snapshot(session, id);
-        const selected = selectedBot(session, id);
+        const selected = state.bot;
         const params = new URLSearchParams({ client_id: selected.discordBotId, scope: 'bot', permissions: '268435472', guild_id: id, disable_guild_select: 'true' });
         return json(res, 200, { roles: state.roles.length, channels: state.channels.length, inviteUrl: `https://discord.com/oauth2/authorize?${params}` });
       }
@@ -339,7 +340,7 @@ export function createApp(config = {}) {
         const state = await snapshot(session, id);
         const requested = hasTemplate ? data.templateId : data.structure;
         const plan = makePlan(requested, state.roles, state.channels);
-        session.preview = { id, plan, nonce: random(), expires: Date.now() + 5 * 60000 };
+        session.preview = { id, botId: state.bot.id, discordBotId: state.bot.discordBotId, plan, nonce: random(), expires: Date.now() + 5 * 60000 };
         persist(); return json(res, 200, { ...plan, nonce: session.preview.nonce, expires: session.preview.expires });
       }
       if (action === 'apply') {
@@ -351,13 +352,15 @@ export function createApp(config = {}) {
           const pending = session.preview;
           if (!pending || pending.id !== id || pending.expires < Date.now() || !equal(data.nonce, pending.nonce) || data.confirm !== `APPLY ${id}`) throw new HttpError(409, 'Preview expired or confirmation does not match. Preview again.');
           delete session.preview; persist();
-          const state = await snapshot(session, id);
+          const chosen = selectedBot(session, id);
+          if (pending.botId !== chosen.id || pending.discordBotId !== chosen.discordBotId) throw new HttpError(409, 'Selected bot changed. Review a fresh preview.');
+          const state = await snapshot(session, id, chosen);
           const current = makePlan(pending.plan.structure, state.roles, state.channels);
           if (current.fingerprint !== pending.plan.fingerprint) throw new HttpError(409, 'Server structure changed. Review a fresh preview.');
           return applyPlan(current, (step, parentId) => {
             const path = step.kind === 'role' ? `/guilds/${id}/roles` : `/guilds/${id}/channels`;
             const payload = step.kind === 'role' ? { name: step.name, permissions: '0', mentionable: false } : { name: step.name, type: step.kind === 'category' ? 4 : 0, ...(parentId ? { parent_id: parentId } : {}) };
-            return bot(session, path, { method: 'POST', headers: { 'X-Audit-Log-Reason': encodeURIComponent(`Chaotic Command setup by ${session.user.id}`) }, body: JSON.stringify(payload) }, id);
+            return bot(state.bot, path, { method: 'POST', headers: { 'X-Audit-Log-Reason': encodeURIComponent(`Chaotic Command setup by ${session.user.id}`) }, body: JSON.stringify(payload) });
           });
         });
         return json(res, 200, result);

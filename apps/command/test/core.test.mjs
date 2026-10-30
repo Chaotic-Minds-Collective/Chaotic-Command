@@ -138,3 +138,26 @@ test('read-only server audit inventories roles and channels and flags review ite
   assert.ok(audit.findings.some(item => item.code === 'empty-categories'));
   assert.match(audit.scopeNote, /does not calculate effective member visibility/);
 });
+
+
+test('preview fingerprint covers permission overwrites and server-wide role permissions', () => {
+  const roles = [{ id: 'guild', name: '@everyone', permissions: '0' }];
+  const channels = [{ id: 'category', name: 'Community', type: 4, permission_overwrites: [] }];
+  const before = makePlan('community', roles, channels).fingerprint;
+  channels[0].permission_overwrites.push({ id: 'guild', type: 0, allow: '1024', deny: '0' });
+  assert.notEqual(makePlan('community', roles, channels).fingerprint, before);
+  channels[0].permission_overwrites = [];
+  roles[0].permissions = '1024';
+  assert.notEqual(makePlan('community', roles, channels).fingerprint, before);
+});
+
+test('preview fingerprint is independent of Discord list and overwrite order', () => {
+  const roles = [{ id: 'guild', name: '@everyone', permissions: '0' }, { id: 'member', name: 'Member', permissions: '0' }];
+  const channels = [{ id: 'category', name: 'Community', type: 4, permission_overwrites: [
+    { id: 'guild', type: 0, allow: '0', deny: '1024' }, { id: 'member', type: 0, allow: '1024', deny: '0' }
+  ] }, { id: 'general', name: 'general', type: 0, parent_id: 'category' }];
+  const before = makePlan('community', roles, channels).fingerprint;
+  const reordered = structuredClone(channels).reverse();
+  reordered.find(channel => channel.type === 4).permission_overwrites.reverse();
+  assert.equal(makePlan('community', [...roles].reverse(), reordered).fingerprint, before);
+});

@@ -192,3 +192,77 @@ test('per-server bot assignments are isolated by Discord account', async t => {
   response = await fetch(`${url}/api/guilds/123456789012345678/bot`, { headers: { Cookie: ownerB.cookie } });
   assert.equal((await response.json()).selectedBotId, botB.id);
 });
+
+
+async function botSwitchScenario(t) {
+  const guildId = '123456789012345678';
+  const tokens = ['fixture-bot-a-token-not-a-real-secret', 'fixture-bot-b-token-not-a-real-secret'];
+  const identities = tokens.map((token, index) => ({ id: `${index + 7}`.repeat(18), username: `fixture-bot-${index}`, bot: true }));
+  const writes = [];
+  let onWrite = async () => {};
+  const mockDiscord = async (input, options = {}) => {
+    const path = new URL(input).pathname.replace('/api/v10', '');
+    const auth = options.headers?.Authorization;
+    if (path === '/oauth2/token') return json({ access_token: 'fixture-user-token', expires_in: 3600 });
+    if (path === '/users/@me') {
+      if (auth === 'Bearer fixture-user-token') return json({ id: '111111111111111111', username: 'fixture-owner' });
+      const index = tokens.findIndex(token => auth === `Bot ${token}`);
+      if (index >= 0) return json(identities[index]);
+    }
+    if (path === '/users/@me/guilds') return json([{ id: guildId, name: 'Offline fixture', owner: true }]);
+    if (options.method === 'POST' && path.startsWith(`/guilds/${guildId}/`)) {
+      writes.push({ auth, body: JSON.parse(options.body) });
+      await onWrite(writes.length);
+      return json({ id: `created-${writes.length}` });
+    }
+    if (path === `/guilds/${guildId}/roles`) return json([{ id: guildId, name: '@everyone', permissions: '0' }, { id: 'bot-role', name: 'Bot', permissions: '268435472' }]);
+    if (path === `/guilds/${guildId}/channels`) return json([]);
+    if (identities.some(identity => path === `/guilds/${guildId}/members/${identity.id}`)) return json({ roles: ['bot-role'] });
+    throw new Error('Unexpected offline fixture route: ' + path);
+  };
+  const { url } = await fixture(t, mockDiscord);
+  const auth = await signIn(url, 'fixture-owner');
+  const request = async (path, data, acting = auth) => {
+    const response = await fetch(`${url}${path}`, { headers: headers(acting), ...(data === undefined ? {} : { method: 'POST', body: JSON.stringify(data) }) });
+    return { status: response.status, data: await response.json() };
+  };
+  const bots = [];
+  for (const token of tokens) {
+    const result = await request('/api/bots', { token });
+    assert.equal(result.status, 201);
+    bots.push(result.data.bot);
+  }
+  return { guildId, tokens, bots, writes, request, signIn: () => signIn(url, 'same-owner-another-session'), onWrite: callback => { onWrite = callback; } };
+}
+
+for (const mode of ['default', 'server']) {
+  test(`changing the ${mode} bot invalidates an earlier preview before any Discord writes`, async t => {
+    const f = await botSwitchScenario(t);
+    const selectionPath = mode === 'default' ? '/api/bots/select' : `/api/guilds/${f.guildId}/bot`;
+    assert.equal((await f.request(selectionPath, { id: f.bots[0].id })).status, 200);
+    const preview = await f.request(`/api/guilds/${f.guildId}/preview`, { templateId: 'community' });
+    assert.equal(preview.status, 200);
+    const acting = mode === 'server' ? await f.signIn() : undefined;
+    assert.equal((await f.request(selectionPath, { id: f.bots[1].id }, acting)).status, 200);
+    const result = await f.request(`/api/guilds/${f.guildId}/apply`, { nonce: preview.data.nonce, confirm: `APPLY ${f.guildId}` });
+    assert.equal(result.status, 409);
+    assert.match(result.data.error, /bot.*changed|fresh preview/i);
+    assert.equal(f.writes.length, 0);
+  });
+}
+
+test('an in-flight apply never switches bot credentials between writes', async t => {
+  const f = await botSwitchScenario(t);
+  const selectionPath = `/api/guilds/${f.guildId}/bot`;
+  assert.equal((await f.request(selectionPath, { id: f.bots[0].id })).status, 200);
+  const preview = await f.request(`/api/guilds/${f.guildId}/preview`, { templateId: 'community' });
+  assert.equal(preview.status, 200);
+  f.onWrite(async count => {
+    if (count === 1) assert.equal((await f.request(selectionPath, { id: f.bots[1].id })).status, 200);
+  });
+  const result = await f.request(`/api/guilds/${f.guildId}/apply`, { nonce: preview.data.nonce, confirm: `APPLY ${f.guildId}` });
+  assert.equal(result.status, 200);
+  assert.equal(result.data.error, undefined);
+  assert.equal(f.writes.length, 7);
+  assert.ok(f.writes.every(write => write.auth === `Bot ${f.tokens[0]}`));
+});
