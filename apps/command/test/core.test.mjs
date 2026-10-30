@@ -63,3 +63,12 @@ test('existing role permissions are included in preview and privileged roles are
   assert.deepEqual(managed.steps[0].permissionFlags, ['Manage Roles']);
   assert.equal(managed.steps[0].elevatedPermissions, true);
 });
+
+test('permission changes alter the preview fingerprint and unknown bits are flagged', () => {
+  const ordinary = makePlan('community', [{ id: 'member', name: 'Member', permissions: '1024' }], []);
+  const changed = makePlan('community', [{ id: 'member', name: 'Member', permissions: String(1024n | (1n << 28n)) }], []);
+  assert.notEqual(ordinary.fingerprint, changed.fingerprint);
+  const unknown = makePlan('community', [{ id: 'member', name: 'Member', permissions: String(1n << 45n) }], []);
+  assert.deepEqual(unknown.steps[0].permissionFlags, ['Other/unrecognized permissions present']);
+  assert.equal(unknown.steps[0].elevatedPermissions, true);
+});
