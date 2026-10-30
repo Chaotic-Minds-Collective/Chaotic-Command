@@ -330,6 +330,7 @@ run(async () => {
   $('user').textContent = `Signed in as ${session.user.username}`;
   options($('template'), (await api('/api/templates')).templates);
   await refreshSavedStructures();
+  await refreshBots();
   $('template').add(new Option('Custom structure', 'custom'));
   await loadGuilds();
 });
