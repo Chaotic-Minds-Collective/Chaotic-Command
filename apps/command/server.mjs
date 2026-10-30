@@ -224,7 +224,7 @@ export function createApp(config = {}) {
         persist();
         return json(res, 200, { ok: true });
       }
-      const guildBotMatch = /^\\/api\\/guilds\\/(\\d{17,20})\\/bot$/.exec(path);
+      const guildBotMatch = /^\/api\/guilds\/(\d{17,20})\/bot$/.exec(path);
       if (guildBotMatch) {
         const guildId = guildBotMatch[1];
         await authorize(session, guildId);
