@@ -121,7 +121,7 @@ export function validateStructure(value) {
 export function makePlan(templateOrStructure, roles, channels) {
   const template = typeof templateOrStructure === 'string' ? templates.find(t => t.id === templateOrStructure) : null;
   if (typeof templateOrStructure === 'string' && !template) throw new HttpError(400, 'Unknown template.');
-  const structure = validateStructure(template || templateOrStructure);
+  const structure = validateStructure(template ? { roles: template.roles, categories: template.categories } : templateOrStructure);
   const steps = [];
   for (const name of structure.roles) {
     const existing = unique(roles, r => r.name === name, 'role ' + name);
