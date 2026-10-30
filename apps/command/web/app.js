@@ -48,7 +48,7 @@ async function loadSavedStructure() {
   $('custom-roles').value = saved.data.roles.join('\n');
   $('custom-categories').value = saved.data.categories.map(category =>
     category.name + ' | ' + category.channels.join(', ')
-  ).join('\\n');
+  ).join('\n');
   $('template').value = 'custom';
   showCustomBuilder();
   $('saved-structure-name').value = saved.structure.name;
