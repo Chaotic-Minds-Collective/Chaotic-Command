@@ -93,7 +93,11 @@ export function validateStructure(value) {
   if (!Array.isArray(value.roles) || !Array.isArray(value.categories)) throw new HttpError(400, 'Custom structure needs roles and categories lists.');
   if (value.roles.length > MAX_ROLES) throw new HttpError(400, 'A custom structure can contain at most ' + MAX_ROLES + ' roles.');
   if (!value.categories.length || value.categories.length > MAX_CATEGORIES) throw new HttpError(400, 'A custom structure needs 1 to ' + MAX_CATEGORIES + ' categories.');
-  const roles = value.roles.map((item, index) => cleanName(item, 'Role ' + (index + 1)));
+  const roles = value.roles.map((item, index) => {
+    const name = cleanName(item, 'Role ' + (index + 1));
+    if (name.toLowerCase() === '@everyone') throw new HttpError(400, 'The @everyone role is managed by Discord and cannot be created as a custom role.');
+    return name;
+  });
   const categories = value.categories.map((item, index) => {
     if (!item || typeof item !== 'object' || Array.isArray(item) || Object.keys(item).some(key => !['name', 'channels'].includes(key))) {
       throw new HttpError(400, 'Category ' + (index + 1) + ' contains unsupported fields.');
