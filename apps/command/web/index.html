@@ -4,15 +4,16 @@
   <h3>Build your server structure</h3>
   <section class="ai-assist" aria-labelledby="ai-assist-title">
     <h4 id="ai-assist-title">AI-assisted design</h4>
-    <p>Chaotic Command does not connect to an AI provider. Describe your server, copy the generated prompt into ChatGPT or another AI assistant, then paste its JSON response here. Nothing is sent to an AI service automatically.</p>
-    <label for="design-brief">What kind of server are you building?</label>
+    <p>Chaotic Command does not connect to an AI provider. Describe your server or requested changes, copy the prompt into ChatGPT or another AI assistant, then paste its JSON response here. When your editor already contains a structure, the prompt includes it as a starting draft for refinement. Nothing is sent to an AI service automatically.</p>
+    <label for="design-brief">What kind of server are you building, or what would you like to change?</label>
     <textarea id="design-brief" rows="3" maxlength="1500" placeholder="A gaming community for friends who play survival games, with event planning and looking-for-group channels."></textarea>
-    <button id="generate-ai-prompt" type="button">Build AI prompt</button>
+    <button id="generate-ai-prompt" type="button">Build / refine AI prompt</button>
     <label for="ai-prompt">Prompt to copy into your AI assistant</label>
     <textarea id="ai-prompt" rows="9" readonly placeholder="Your structured prompt will appear here."></textarea>
     <button id="copy-ai-prompt" type="button">Copy prompt</button>
-    <label for="ai-structure-json">Paste the AI-generated JSON structure</label>
+    <label for="ai-structure-json">Paste the complete AI-generated JSON structure</label>
     <textarea id="ai-structure-json" rows="7" placeholder='{"roles":["Member"],"categories":[{"name":"Community","channels":["welcome","general"]}]}'></textarea>
+    <p>Import replaces the current role and category editor fields. Review the full result before creating a preview.</p>
     <button id="import-ai-structure" type="button">Import JSON into editor</button>
     <p id="ai-status" role="status" aria-live="polite"></p>
   </section>
