@@ -102,3 +102,23 @@ test('partial Discord failure reports completed objects and retry preview reuses
   const repeat = await f.request(path('preview'), { templateId: 'gaming' });
   assert.equal(repeat.data.steps.filter(step => step.existingId).length, 2);
 });
+
+test('custom structure uses the same preview, drift check, confirmation and additive apply protections', async t => {
+  const f = await setup(t);
+  const structure = { roles: ['Member', 'Event Host'], categories: [{ name: 'Community', channels: ['welcome', 'general-chat'] }, { name: 'Events', channels: ['announcements'] }] };
+  const preview = await f.request(path('preview'), { structure });
+  assert.equal(preview.status, 200);
+  assert.equal(preview.data.templateId, null);
+  assert.deepEqual(preview.data.structure, structure);
+  assert.equal(preview.data.steps.length, 7);
+  assert.equal(f.writes.length, 0, 'custom preview must not write to Discord');
+  assert.equal((await f.request(path('preview'), { structure, templateId: 'community' })).status, 400);
+  assert.equal((await f.request(path('preview'), { structure, extra: true })).status, 400);
+  const result = await f.request(path('apply'), { nonce: preview.data.nonce, confirm: `APPLY ${guild}` });
+  assert.equal(result.status, 200);
+  assert.equal(result.data.completed.length, 7);
+  assert.equal(f.writes.length, 7);
+  assert.ok(f.writes.filter(write => write.path.endsWith('/roles')).every(write => write.data.permissions === '0'));
+  assert.ok(f.writes.filter(write => write.path.endsWith('/channels')).every(write => write.data.type === 4 || write.data.parent_id));
+  assert.equal((await f.request(path('apply'), { nonce: preview.data.nonce, confirm: `APPLY ${guild}` })).status, 409);
+});
