@@ -155,13 +155,13 @@ function importAiStructure() {
   message('AI structure imported for review. Preview it before applying.');
 }
 async function loadGuilds() {
-  clearPlan(); selected = ''; $('notes').value = ''; $('status').textContent = ''; $('invite').removeAttribute('href');
+  clearPlan(); clearAudit(); selected = ''; $('notes').value = ''; $('status').textContent = ''; $('invite').removeAttribute('href');
   const data = await api('/api/guilds');
   options($('guild'), data.guilds, 'Choose a server');
   message(data.guilds.length ? 'Select a server to begin.' : 'No manageable servers found. You need Manage Server permission in Discord.');
 }
 async function loadServer() {
-  clearPlan(); selected = $('guild').value; $('notes').value = ''; $('status').textContent = ''; $('invite').removeAttribute('href');
+  clearPlan(); clearAudit(); selected = $('guild').value; $('notes').value = ''; $('status').textContent = ''; $('invite').removeAttribute('href');
   if (!selected) { message('Choose a server.'); return; }
   const notes = await api(`/api/guilds/${selected}/notes`); $('notes').value = notes.notes;
   try {
@@ -198,7 +198,7 @@ $('audit').onclick = () => run(async () => {
     '',
     audit.scopeNote
   ];
-  $('audit-report').textContent = lines.join('\\n');
+  $('audit-report').textContent = lines.join('\n');
   $('audit-report').hidden = false;
   message('Read-only audit complete. No Discord changes have been made.');
 });
