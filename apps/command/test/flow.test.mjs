@@ -83,7 +83,7 @@ test('full offline OAuth, notes, CSRF, preview, apply, replay prevention and log
 });
 test('authorization and bot permissions are rechecked; drift invalidates preview', async t => {
   const f = await setup(t);
-  f.setAllowed(false); assert.equal((await f.request(path('notes'))).status, 403);
+  f.setAllowed(false); assert.equal((await f.request(path('notes'), { notes: 'saved' })).status, 403);
   f.setAllowed(true); f.setBotAllowed(false);
   assert.equal((await f.request(path('preview'), { templateId: 'community' })).status, 403);
   f.setBotAllowed(true);
@@ -121,4 +121,17 @@ test('custom structure uses the same preview, drift check, confirmation and addi
   assert.ok(f.writes.filter(write => write.path.endsWith('/roles')).every(write => write.data.permissions === '0'));
   assert.ok(f.writes.filter(write => write.path.endsWith('/channels')).every(write => write.data.type === 4 || write.data.parent_id));
   assert.equal((await f.request(path('apply'), { nonce: preview.data.nonce, confirm: `APPLY ${guild}` })).status, 409);
+});
+
+
+test('permission-overwrite drift rejects apply with no Discord writes', async t => {
+  const f = await setup(t);
+  f.channels.push({ id: 'category', name: 'Community', type: 4, permission_overwrites: [] });
+  const preview = await f.request(path('preview'), { templateId: 'community' });
+  assert.equal(preview.status, 200);
+  f.channels[0].permission_overwrites = [{ id: guild, type: 0, allow: '1024', deny: '0' }];
+  const result = await f.request(path('apply'), { nonce: preview.data.nonce, confirm: `APPLY ${guild}` });
+  assert.equal(result.status, 409);
+  assert.match(result.data.error, /structure changed/);
+  assert.equal(f.writes.length, 0);
 });
