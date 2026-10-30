@@ -288,7 +288,8 @@ export function createApp(config = {}) {
       }
       if (action === 'status' && req.method === 'GET') {
         const state = await snapshot(session, id);
-        const selected = selectedBot(session);\n        const params = new URLSearchParams({ client_id: selected.discordBotId, scope: 'bot', permissions: '268435472', guild_id: id, disable_guild_select: 'true' });
+        const selected = selectedBot(session);
+        const params = new URLSearchParams({ client_id: selected.discordBotId, scope: 'bot', permissions: '268435472', guild_id: id, disable_guild_select: 'true' });
         return json(res, 200, { roles: state.roles.length, channels: state.channels.length, inviteUrl: `https://discord.com/oauth2/authorize?${params}` });
       }
       if (action === 'notes') {
