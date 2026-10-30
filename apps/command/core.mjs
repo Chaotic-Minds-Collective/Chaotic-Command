@@ -72,18 +72,64 @@ function unique(items, predicate, label) {
   if (matches.length > 1) throw new HttpError(409, 'Ambiguous existing ' + label + '; rename duplicates in Discord first.');
   return matches[0];
 }
+const MAX_ROLES = 20;
+const MAX_CATEGORIES = 20;
+const MAX_CHANNELS_PER_CATEGORY = 30;
+const MAX_TOTAL_OBJECTS = 100;
+
+function cleanName(value, label, max = 100) {
+  if (typeof value !== 'string') throw new HttpError(400, label + ' must be text.');
+  const name = value.trim();
+  if (!name || name.length > max || /[\\u0000-\\u001f\\u007f]/.test(name)) {
+    throw new HttpError(400, label + ' must contain 1 to ' + max + ' valid characters.');
+  }
+  return name;
+}
+
+/** Normalize an untrusted user-authored structure to the only fields the planner supports. */
+export function validateStructure(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new HttpError(400, 'Custom structure must be an object.');
+  if (Object.keys(value).some(key => !['roles', 'categories'].includes(key))) throw new HttpError(400, 'Custom structure contains unsupported fields.');
+  if (!Array.isArray(value.roles) || !Array.isArray(value.categories)) throw new HttpError(400, 'Custom structure needs roles and categories lists.');
+  if (value.roles.length > MAX_ROLES) throw new HttpError(400, 'A custom structure can contain at most ' + MAX_ROLES + ' roles.');
+  if (!value.categories.length || value.categories.length > MAX_CATEGORIES) throw new HttpError(400, 'A custom structure needs 1 to ' + MAX_CATEGORIES + ' categories.');
+  const roles = value.roles.map((item, index) => cleanName(item, 'Role ' + (index + 1)));
+  const categories = value.categories.map((item, index) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item) || Object.keys(item).some(key => !['name', 'channels'].includes(key))) {
+      throw new HttpError(400, 'Category ' + (index + 1) + ' contains unsupported fields.');
+    }
+    if (!Array.isArray(item.channels) || item.channels.length > MAX_CHANNELS_PER_CATEGORY) {
+      throw new HttpError(400, 'Each category can contain at most ' + MAX_CHANNELS_PER_CATEGORY + ' channels.');
+    }
+    const name = cleanName(item.name, 'Category ' + (index + 1));
+    const channels = item.channels.map((channel, channelIndex) => {
+      const channelName = cleanName(channel, 'Channel ' + (channelIndex + 1));
+      if (!/^[a-z0-9][a-z0-9_-]*$/.test(channelName)) throw new HttpError(400, 'Channel names must use lowercase letters, numbers, hyphens, or underscores.');
+      return channelName;
+    });
+    if (new Set(channels.map(channel => channel.toLowerCase())).size !== channels.length) throw new HttpError(400, 'A category contains duplicate channel names.');
+    return { name, channels };
+  });
+  if (new Set(roles.map(name => name.toLowerCase())).size !== roles.length) throw new HttpError(400, 'Role names must be unique.');
+  if (new Set(categories.map(item => item.name.toLowerCase())).size !== categories.length) throw new HttpError(400, 'Category names must be unique.');
+  const total = roles.length + categories.length + categories.reduce((sum, item) => sum + item.channels.length, 0);
+  if (total > MAX_TOTAL_OBJECTS) throw new HttpError(400, 'A custom structure can contain at most ' + MAX_TOTAL_OBJECTS + ' total objects.');
+  return { roles, categories };
+}
+
 /** Additive only: reuse exact matches; never edit/delete existing objects or grant privileges. */
-export function makePlan(templateId, roles, channels) {
-  const template = templates.find(t => t.id === templateId);
-  if (!template) throw new HttpError(400, 'Unknown template.');
+export function makePlan(templateOrStructure, roles, channels) {
+  const template = typeof templateOrStructure === 'string' ? templates.find(t => t.id === templateOrStructure) : null;
+  if (typeof templateOrStructure === 'string' && !template) throw new HttpError(400, 'Unknown template.');
+  const structure = validateStructure(template || templateOrStructure);
   const steps = [];
-  for (const name of template.roles) {
+  for (const name of structure.roles) {
     const existing = unique(roles, r => r.name === name, 'role ' + name);
-    if (existing?.managed) throw new HttpError(409, 'Role ' + name + ' is managed by an integration. Rename it or choose another template.');
+    if (existing?.managed) throw new HttpError(409, 'Role ' + name + ' is managed by an integration. Rename it or choose another name.');
     const review = existing ? rolePermissionReview(existing.permissions) : { flags: [], elevated: false };
     steps.push({ kind: 'role', name, existingId: existing?.id || null, existingPermissions: existing ? String(existing.permissions || '0') : null, permissionFlags: review.flags, elevatedPermissions: review.elevated });
   }
-  for (const category of template.categories) {
+  for (const category of structure.categories) {
     const existing = unique(channels, c => c.type === 4 && c.name === category.name, 'category ' + category.name);
     steps.push({ kind: 'category', name: category.name, existingId: existing?.id || null });
     for (const name of category.channels) {
@@ -91,7 +137,8 @@ export function makePlan(templateId, roles, channels) {
       steps.push({ kind: 'channel', name, category: category.name, existingId: channel?.id || null });
     }
   }
-  return { templateId, steps, fingerprint: createHash('sha256').update(JSON.stringify(steps)).digest('hex') };
+  const templateId = template?.id || null;
+  return { templateId, structure, steps, fingerprint: createHash('sha256').update(JSON.stringify({ structure, steps })).digest('hex') };
 }
 /** Serialize writes per server; retries re-read Discord and reuse successful partial work. */
 export function createGuildLock() {
