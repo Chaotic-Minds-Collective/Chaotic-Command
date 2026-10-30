@@ -59,6 +59,19 @@ $('preview').onclick = () => run(async () => {
   $('steps').replaceChildren(...plan.steps.map(step => {
     const li = document.createElement('li');
     li.textContent = `${step.existingId ? 'Reuse' : 'Create'} ${step.kind}: ${step.name}${step.category ? ` (in ${step.category})` : ''}`;
+    if (step.kind === 'role' && step.existingId) {
+      const detail = document.createElement('small');
+      detail.textContent = step.permissionFlags?.length
+        ? `Existing permissions: ${step.permissionFlags.join(', ')}${step.elevatedPermissions ? ' — REVIEW: elevated permissions' : ''}`
+        : 'Existing permissions: none';
+      detail.className = step.elevatedPermissions ? 'permission-warning' : 'permission-detail';
+      li.append(document.createElement('br'), detail);
+    } else if (step.kind === 'role') {
+      const detail = document.createElement('small');
+      detail.textContent = 'New role: zero permissions; no members will be assigned.';
+      detail.className = 'permission-detail';
+      li.append(document.createElement('br'), detail);
+    }
     return li;
   }));
   $('expiry').textContent = `Preview expires at ${new Date(plan.expires).toLocaleTimeString()}.`;

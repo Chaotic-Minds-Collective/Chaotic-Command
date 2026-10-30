@@ -26,6 +26,10 @@ Open http://localhost:3000. Without credentials, the UI explains configuration a
 
 ## What works
 
+- GitHub Actions CI runs the Node.js 24 syntax checks and test suite on pushes to `main` and pull requests targeting `main`.
+- Setup previews display recognized permissions on reused roles and warn when elevated or unrecognized permission bits are present. New roles are explicitly shown as zero-permission and unassigned.
+- A disposable-server manual acceptance checklist is available at [docs/discord-acceptance-test.md](docs/discord-acceptance-test.md). Never run live acceptance testing against a production or community server.
+
 - Real Discord OAuth with expiring state, session rotation, HttpOnly/SameSite cookies, server-side tokens, AES-256-GCM encrypted sessions, and logout.
 - Live manageable-server listing, fresh authorization on every server operation, bot permission preflight, and server role/channel counts.
 - Additive community/gaming/support templates. New roles receive **zero permissions** and are not assigned to members. Existing roles are reused without changing their permissions; existing exact-match channels are reused only within the matching category. New channels inherit category/server visibility and may be public; these templates are not a security configuration.
