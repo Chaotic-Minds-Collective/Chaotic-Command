@@ -62,7 +62,13 @@ async function connectBot() {
   const result = await api('/api/bots', { token });
   $('bot-token').value = '';
   await refreshBots();
-  $('bot-status').textContent = `Connected and selected ${result.bot.username}. Install it in your server before setup.`;
+  if (selected) {
+    const assignment = await api(`/api/guilds/${selected}/bot`);
+    $('active-bot').value = assignment.selectedBotId || '';
+    window.commandInviteBase = assignment.inviteUrl || '';
+    updateInviteLink();
+  }
+  $('bot-status').textContent = `Connected and selected ${result.bot.username} as your default bot. Assign it to a server with the selector below.`;
   message('Your Discord bot was verified and connected. The token is not displayed or returned.');
 }
 async function selectBot() {
