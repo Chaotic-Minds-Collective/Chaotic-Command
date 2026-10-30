@@ -68,9 +68,11 @@ async function connectBot() {
 async function selectBot() {
   const id = $('active-bot').value;
   if (!id) throw new Error('Choose a connected bot first.');
-  await api('/api/bots/select', { id: id === 'shared' ? null : id });
+  if (selected) await api(`/api/guilds/${selected}/bot`, { id });
+  else await api('/api/bots/select', { id: id === 'shared' ? null : id });
   await refreshBots();
-  message('Selected bot updated.');
+  if (selected) $('active-bot').value = (await api(`/api/guilds/${selected}/bot`)).selectedBotId || '';
+  message(selected ? 'Bot assignment saved for this server.' : 'Default bot updated.');
 }
 async function removeBot() {
   const id = $('active-bot').value;
@@ -205,6 +207,7 @@ async function loadServer() {
   clearPlan(); clearAudit(); selected = $('guild').value; $('notes').value = ''; $('status').textContent = ''; $('invite').removeAttribute('href');
   if (!selected) { message('Choose a server.'); return; }
   const notes = await api(`/api/guilds/${selected}/notes`); $('notes').value = notes.notes;
+  const botChoice = await api(`/api/guilds/${selected}/bot`); $('active-bot').value = botChoice.selectedBotId || '';
   try {
     const status = await api(`/api/guilds/${selected}/status`);
     $('status').textContent = `Bot ready. ${status.channels} channels and ${status.roles} roles on this server.`;
