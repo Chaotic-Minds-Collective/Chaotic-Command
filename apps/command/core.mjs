@@ -66,7 +66,7 @@ export function validateId(id) {
 }
 function unique(items, predicate, label) {
   const matches = items.filter(predicate);
-  if (matches.length > 1) throw new HttpError(409, \`Ambiguous existing \${label}; rename duplicates in Discord first.\`);
+  if (matches.length > 1) throw new HttpError(409, 'Ambiguous existing ' + label + '; rename duplicates in Discord first.');
   return matches[0];
 }
 /** Additive only: reuse exact matches; never edit/delete existing objects or grant privileges. */
@@ -75,16 +75,16 @@ export function makePlan(templateId, roles, channels) {
   if (!template) throw new HttpError(400, 'Unknown template.');
   const steps = [];
   for (const name of template.roles) {
-    const existing = unique(roles, r => r.name === name, \`role \${name}\`);
-    if (existing?.managed) throw new HttpError(409, \`Role \${name} is managed by an integration. Rename it or choose another template.\`);
+    const existing = unique(roles, r => r.name === name, 'role ' + name);
+    if (existing?.managed) throw new HttpError(409, 'Role ' + name + ' is managed by an integration. Rename it or choose another template.');
     const review = existing ? rolePermissionReview(existing.permissions) : { flags: [], elevated: false };
     steps.push({ kind: 'role', name, existingId: existing?.id || null, existingPermissions: existing ? String(existing.permissions || '0') : null, permissionFlags: review.flags, elevatedPermissions: review.elevated });
   }
   for (const category of template.categories) {
-    const existing = unique(channels, c => c.type === 4 && c.name === category.name, \`category \${category.name}\`);
+    const existing = unique(channels, c => c.type === 4 && c.name === category.name, 'category ' + category.name);
     steps.push({ kind: 'category', name: category.name, existingId: existing?.id || null });
     for (const name of category.channels) {
-      const channel = existing && unique(channels, c => c.type === 0 && c.name === name && c.parent_id === existing.id, \`channel \${name}\`);
+      const channel = existing && unique(channels, c => c.type === 0 && c.name === name && c.parent_id === existing.id, 'channel ' + name);
       steps.push({ kind: 'channel', name, category: category.name, existingId: channel?.id || null });
     }
   }
