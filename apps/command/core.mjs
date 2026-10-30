@@ -80,7 +80,7 @@ const MAX_TOTAL_OBJECTS = 100;
 function cleanName(value, label, max = 100) {
   if (typeof value !== 'string') throw new HttpError(400, label + ' must be text.');
   const name = value.trim();
-  if (!name || name.length > max || /[\\u0000-\\u001f\\u007f]/.test(name)) {
+  if (!name || name.length > max || /[\u0000-\u001f\u007f]/.test(name)) {
     throw new HttpError(400, label + ' must contain 1 to ' + max + ' valid characters.');
   }
   return name;
