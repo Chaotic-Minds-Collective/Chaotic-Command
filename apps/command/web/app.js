@@ -123,7 +123,6 @@ async function deleteSavedStructure() {
   await api(`/api/structures/${id}/delete`, {});
   $('saved-structure-name').value = '';
   await refreshSavedStructures();
-  await refreshBots();
   $('saved-structure-status').textContent = 'Saved personal structure deleted. No Discord server was changed.';
   message('Personal structure deleted.');
 }
