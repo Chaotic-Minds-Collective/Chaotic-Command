@@ -141,3 +141,54 @@ test('server audit and preview use the selected personal bot without a shared bo
   assert.ok((await response.json()).steps.length > 0);
   assert.ok(authorizationHeaders.filter(value => value === 'Bot ' + rawToken).length >= 5);
 });
+
+test('per-server bot assignments are isolated by Discord account', async t => {
+  const botTokens = new Map([
+    ['Bot owner-a-bot-token-is-valid-and-long', { id: '777777777777777777', username: 'owner-a-bot', bot: true }],
+    ['Bot owner-b-bot-token-is-valid-and-long', { id: '888888888888888888', username: 'owner-b-bot', bot: true }]
+  ]);
+  const mockDiscord = async (input, options = {}) => {
+    const url = new URL(input);
+    if (url.pathname === '/api/v10/oauth2/token' && options.method === 'POST') {
+      const code = new URLSearchParams(options.body).get('code');
+      return json({ access_token: `user-${code}`, expires_in: 3600 });
+    }
+    if (url.pathname === '/api/v10/users/@me') {
+      const auth = options.headers?.Authorization;
+      if (botTokens.has(auth)) return json(botTokens.get(auth));
+      if (auth === 'Bearer user-owner-a') return json({ id: '111111111111111111', username: 'owner-a' });
+      if (auth === 'Bearer user-owner-b') return json({ id: '222222222222222222', username: 'owner-b' });
+    }
+    if (url.pathname === '/api/v10/users/@me/guilds') return json([{ id: '123456789012345678', name: 'Shared Test Server', owner: true, permissions: '0' }]);
+    throw new Error('Unexpected Discord request: ' + url.pathname);
+  };
+  const { url } = await fixture(t, mockDiscord);
+  const ownerA = await signIn(url, 'owner-a');
+  const ownerB = await signIn(url, 'owner-b');
+
+  let response = await fetch(`${url}/api/bots`, { method: 'POST', headers: headers(ownerA), body: JSON.stringify({ token: 'owner-a-bot-token-is-valid-and-long' }) });
+  assert.equal(response.status, 201);
+  const botA = (await response.json()).bot;
+  response = await fetch(`${url}/api/bots`, { method: 'POST', headers: headers(ownerB), body: JSON.stringify({ token: 'owner-b-bot-token-is-valid-and-long' }) });
+  assert.equal(response.status, 201);
+  const botB = (await response.json()).bot;
+
+  response = await fetch(`${url}/api/guilds/123456789012345678/bot`, {
+    method: 'POST', headers: headers(ownerB), body: JSON.stringify({ id: botA.id })
+  });
+  assert.equal(response.status, 404, 'an account cannot assign another account\'s bot');
+
+  response = await fetch(`${url}/api/guilds/123456789012345678/bot`, {
+    method: 'POST', headers: headers(ownerA), body: JSON.stringify({ id: botA.id })
+  });
+  assert.equal(response.status, 200);
+  response = await fetch(`${url}/api/guilds/123456789012345678/bot`, { headers: { Cookie: ownerA.cookie } });
+  assert.equal((await response.json()).selectedBotId, botA.id);
+
+  response = await fetch(`${url}/api/guilds/123456789012345678/bot`, {
+    method: 'POST', headers: headers(ownerB), body: JSON.stringify({ id: botB.id })
+  });
+  assert.equal(response.status, 200);
+  response = await fetch(`${url}/api/guilds/123456789012345678/bot`, { headers: { Cookie: ownerB.cookie } });
+  assert.equal((await response.json()).selectedBotId, botB.id);
+});
