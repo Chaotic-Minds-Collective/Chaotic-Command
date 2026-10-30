@@ -39,6 +39,9 @@ function customStructure() {
   if (!categories.length) throw new Error('Add at least one category using the Category | channel-one, channel-two format.');
   return { roles, categories };
 }
+function updateInviteLink() {
+  if (selected && window.commandInviteBase) $('invite').href = `${window.commandInviteBase}&guild_id=${selected}&disable_guild_select=true`;
+}
 async function refreshBots() {
   const data = await api('/api/bots');
   const items = [...data.bots];
@@ -47,6 +50,7 @@ async function refreshBots() {
   $('active-bot').value = data.selectedBotId || '';
   const selectedBot = items.find(bot => bot.id === data.selectedBotId);
   window.commandInviteBase = selectedBot?.inviteUrl || '';
+  updateInviteLink();
   $('bot-status').textContent = selectedBot
     ? `Selected: ${selectedBot.username}. Install this bot in a server before running setup.`
     : 'No bot selected. Connect your own bot to continue.';
