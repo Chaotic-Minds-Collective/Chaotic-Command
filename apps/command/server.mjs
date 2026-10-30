@@ -8,6 +8,7 @@ import { HttpError, templates, hasPermission, canManage, validateId, validateStr
 
 const here = dirname(fileURLToPath(import.meta.url));
 const random = () => randomBytes(32).toString('hex');
+const structureNameKey = value => value.normalize('NFKC').toLowerCase();
 const equal = (a, b) => typeof a === 'string' && typeof b === 'string' && Buffer.byteLength(a) === Buffer.byteLength(b) && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 const HOUR = 3600000;
 
@@ -179,7 +180,9 @@ export function createApp(config = {}) {
         const structure = validateStructure(data.structure);
         const count = db.prepare('SELECT COUNT(*) AS count FROM saved_structures WHERE owner_id = ?').get(session.user.id).count;
         if (count >= 20) throw new HttpError(409, 'You can save up to 20 personal structures. Delete one before saving another.');
-        if (db.prepare('SELECT 1 FROM saved_structures WHERE owner_id = ? AND name = ? COLLATE NOCASE').get(session.user.id, name)) {
+        const nameKey = structureNameKey(name);
+        const existingNames = db.prepare('SELECT name FROM saved_structures WHERE owner_id = ?').all(session.user.id);
+        if (existingNames.some(row => structureNameKey(row.name) === nameKey)) {
           throw new HttpError(409, 'You already have a saved structure with that name. Rename it or choose another name.');
         }
         const id = randomBytes(16).toString('hex'), now = Date.now();
@@ -203,7 +206,9 @@ export function createApp(config = {}) {
           if (Object.keys(data).some(key => key !== 'name') || typeof data.name !== 'string') throw new HttpError(400, 'Provide only the new template name.');
           const name = data.name.trim();
         if (!name || name.length > 60 || /[\u0000-\u001f\u007f]/.test(name)) throw new HttpError(400, 'Template name must contain 1 to 60 valid characters.');
-          if (db.prepare('SELECT 1 FROM saved_structures WHERE owner_id = ? AND name = ? COLLATE NOCASE AND id <> ?').get(session.user.id, name, structureId)) {
+          const nameKey = structureNameKey(name);
+          const existingNames = db.prepare('SELECT name FROM saved_structures WHERE owner_id = ? AND id <> ?').all(session.user.id, structureId);
+          if (existingNames.some(row => structureNameKey(row.name) === nameKey)) {
             throw new HttpError(409, 'You already have a saved structure with that name.');
           }
           const now = Date.now();
