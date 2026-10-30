@@ -25,7 +25,7 @@ async function run(action) {
 function options(el, items, placeholder) {
   el.replaceChildren();
   if (placeholder) el.add(new Option(placeholder, ''));
-  items.forEach(item => el.add(new Option(item.name, item.id)));
+  items.forEach(item => el.add(new Option(item.name || item.username, item.id)));
 }
 function requireGuild() { if (!selected) throw new Error('Choose a server first.'); }
 function customStructure() {
