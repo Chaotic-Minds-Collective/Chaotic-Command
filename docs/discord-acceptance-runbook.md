@@ -177,7 +177,7 @@ Use a separate temporary Discord application and bot for this section. Keep the 
 
 Do not use real customer tokens or production servers for acceptance testing. Automated tests cover account isolation and encryption, but live token verification and installation still require this disposable test.
 
-## 10. Test the read-only server audit
+## 9. Test the read-only server audit
 
 1. Select the disposable server.
 2. Run **Audit selected server**.
