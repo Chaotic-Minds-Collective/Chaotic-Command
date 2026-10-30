@@ -183,7 +183,8 @@ export function createApp(config = {}) {
       const data = await body(req);
       if (action === 'preview') {
         const state = await snapshot(session, id);
-        const plan = makePlan(data.templateId, state.roles, state.channels);
+        const requested = data.templateId ? data.templateId : data.structure;
+        const plan = makePlan(requested, state.roles, state.channels);
         session.preview = { id, plan, nonce: random(), expires: Date.now() + 5 * 60000 };
         persist(); return json(res, 200, { ...plan, nonce: session.preview.nonce, expires: session.preview.expires });
       }
@@ -197,7 +198,7 @@ export function createApp(config = {}) {
           if (!pending || pending.id !== id || pending.expires < Date.now() || !equal(data.nonce, pending.nonce) || data.confirm !== `APPLY ${id}`) throw new HttpError(409, 'Preview expired or confirmation does not match. Preview again.');
           delete session.preview; persist();
           const state = await snapshot(session, id);
-          const current = makePlan(pending.plan.templateId, state.roles, state.channels);
+          const current = makePlan(pending.plan.structure, state.roles, state.channels);
           if (current.fingerprint !== pending.plan.fingerprint) throw new HttpError(409, 'Server structure changed. Review a fresh preview.');
           return applyPlan(current, (step, parentId) => {
             const path = step.kind === 'role' ? `/guilds/${id}/roles` : `/guilds/${id}/channels`;
