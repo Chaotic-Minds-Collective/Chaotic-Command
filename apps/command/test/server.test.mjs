@@ -83,7 +83,7 @@ test('mocked Discord OAuth, CSRF, preview, apply and stale-plan rejection work e
       return json({ id: botId, username: 'chaotic-command' });
     }
     if (url.pathname === '/api/v10/users/@me/guilds') {
-      return json([{ id: guildId, name: 'Disposable Test Server', owner: true, permissions: '0' }]);
+      return json([{ id: guildId, name: 'Disposable Test Server', owner: true, permissions: '0' }, { id: '555555555555555555', name: 'Unauthorized Server', owner: false, permissions: '0' }]);
     }
     if (url.pathname === `/api/v10/guilds/${guildId}/roles` && method === 'GET') return json(roles);
     if (url.pathname === `/api/v10/guilds/${guildId}/channels` && method === 'GET') return json(channels);
@@ -110,6 +110,12 @@ test('mocked Discord OAuth, CSRF, preview, apply and stale-plan rejection work e
 
   const guilds = await fetch(`${url}/api/guilds`, { headers: { Cookie: cookie } });
   assert.deepEqual((await guilds.json()).guilds, [{ id: guildId, name: 'Disposable Test Server' }]);
+  response = await fetch('${url}/api/guilds/555555555555555555/notes', { headers: { Cookie: cookie } });
+  assert.equal(response.status, 403, 'notes must be unavailable without Manage Server');
+  response = await fetch('${url}/api/guilds/555555555555555555/preview', {
+    method: 'POST', headers, body: JSON.stringify({ templateId: 'community' })
+  });
+  assert.equal(response.status, 403, 'preview must be unavailable without Manage Server');
 
   let response = await fetch(`${url}/api/guilds/${guildId}/preview`, {
     method: 'POST', headers: { ...headers, 'X-CSRF-Token': '' }, body: JSON.stringify({ templateId: 'community' })
@@ -140,6 +146,11 @@ test('mocked Discord OAuth, CSRF, preview, apply and stale-plan rejection work e
   assert.equal(applied.completed.length, 7);
   assert.equal(writes.length, 7);
   assert.ok(writes.filter(w => w.kind === 'role').every(w => w.body.permissions === '0'));
+  response = await fetch(`${url}/api/guilds/${guildId}/apply`, {
+    method: 'POST', headers, body: JSON.stringify({ nonce: preview.nonce, confirm: `APPLY ${guildId}` })
+  });
+  assert.equal(response.status, 409, 'an applied preview must not be replayable');
+  assert.equal(writes.length, 7, 'replay must not send additional Discord writes');
 
   const member = roles.find(role => role.name === 'Member');
   member.permissions = String(1n << 28n);
