@@ -110,14 +110,14 @@ test('mocked Discord OAuth, CSRF, preview, apply and stale-plan rejection work e
 
   const guilds = await fetch(`${url}/api/guilds`, { headers: { Cookie: cookie } });
   assert.deepEqual((await guilds.json()).guilds, [{ id: guildId, name: 'Disposable Test Server' }]);
-  response = await fetch('${url}/api/guilds/555555555555555555/notes', { headers: { Cookie: cookie } });
+  let response = await fetch(`${url}/api/guilds/555555555555555555/notes`, { headers: { Cookie: cookie } });
   assert.equal(response.status, 403, 'notes must be unavailable without Manage Server');
-  response = await fetch('${url}/api/guilds/555555555555555555/preview', {
+  response = await fetch(`${url}/api/guilds/555555555555555555/preview`, {
     method: 'POST', headers, body: JSON.stringify({ templateId: 'community' })
   });
   assert.equal(response.status, 403, 'preview must be unavailable without Manage Server');
 
-  let response = await fetch(`${url}/api/guilds/${guildId}/preview`, {
+  response = await fetch(`${url}/api/guilds/${guildId}/preview`, {
     method: 'POST', headers: { ...headers, 'X-CSRF-Token': '' }, body: JSON.stringify({ templateId: 'community' })
   });
   assert.equal(response.status, 403);
