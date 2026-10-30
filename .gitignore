@@ -30,3 +30,9 @@ credentials.json
 # Operating system files
 .DS_Store
 Thumbs.db
+
+# Runtime storage: encrypted OAuth sessions and private server notes
+.data/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
