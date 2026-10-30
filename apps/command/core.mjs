@@ -56,6 +56,136 @@ function rolePermissionReview(value) {
   if (unknown) flags.push('Other/unrecognized permissions present');
   return { flags, elevated: unknown || ROLE_PERMISSION_FLAGS.some(([bit, , sensitive]) => sensitive && (permissions & bit) !== 0n) };
 }
+
+function normalizedAuditName(value) {
+  return String(value || '').normalize('NFKC').toLowerCase();
+}
+function duplicateNames(items) {
+  const groups = new Map();
+  for (const item of items) {
+    const key = normalizedAuditName(item.name);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(item.name);
+  }
+  return [...groups.values()].filter(names => names.length > 1);
+}
+const CHANNEL_TYPE_NAMES = new Map([
+  [0, 'Text'], [2, 'Voice'], [4, 'Category'], [5, 'Announcement'],
+  [10, 'Announcement thread'], [11, 'Public thread'], [12, 'Private thread'],
+  [13, 'Stage'], [15, 'Forum'], [16, 'Media']
+]);
+
+/** Read-only inventory. This does not calculate effective member access or change Discord. */
+export function auditGuild(roles, channels) {
+  const categories = channels.filter(channel => channel.type === 4);
+  const nonCategoryChannels = channels.filter(channel => channel.type !== 4);
+  const roleReviews = roles.map(role => {
+    const review = rolePermissionReview(role.permissions);
+    return {
+      name: role.name,
+      managed: Boolean(role.managed),
+      permissionFlags: review.flags,
+      elevatedPermissions: review.elevated
+    };
+  });
+  const categoryReports = categories.map(category => ({
+    name: category.name,
+    channels: channels.filter(channel => channel.parent_id === category.id).map(channel => ({
+      name: channel.name,
+      type: CHANNEL_TYPE_NAMES.get(channel.type) || 'Other',
+      permissionOverwriteCount: Array.isArray(channel.permission_overwrites) ? channel.permission_overwrites.length : 0
+    }))
+  }));
+  const uncategorizedChannels = nonCategoryChannels
+    .filter(channel => !categories.some(category => category.id === channel.parent_id))
+    .map(channel => ({
+      name: channel.name,
+      type: CHANNEL_TYPE_NAMES.get(channel.type) || 'Other',
+      permissionOverwriteCount: Array.isArray(channel.permission_overwrites) ? channel.permission_overwrites.length : 0
+    }));
+
+  const findings = [];
+  const elevatedRoles = roleReviews.filter(role => role.elevatedPermissions);
+  if (elevatedRoles.length) {
+    findings.push({
+      severity: 'warning',
+      code: 'elevated-roles',
+      message: `${elevatedRoles.length} role(s) have elevated or unrecognized permissions: ${elevatedRoles.map(role => role.name).join(', ')}. Review them in Discord.`
+    });
+  }
+  const duplicates = duplicateNames(roles);
+  if (duplicates.length) {
+    findings.push({
+      severity: 'warning',
+      code: 'duplicate-role-names',
+      message: `Duplicate role names were found: ${duplicates.map(group => group.join(' / ')).join('; ')}.`
+    });
+  }
+  const duplicateCategories = duplicateNames(categories);
+  if (duplicateCategories.length) {
+    findings.push({
+      severity: 'warning',
+      code: 'duplicate-category-names',
+      message: `Duplicate category names were found: ${duplicateCategories.map(group => group.join(' / ')).join('; ')}.`
+    });
+  }
+  const managedRoles = roleReviews.filter(role => role.managed);
+  if (managedRoles.length) {
+    findings.push({
+      severity: 'info',
+      code: 'managed-roles',
+      message: `${managedRoles.length} role(s) are managed by integrations: ${managedRoles.map(role => role.name).join(', ')}.`
+    });
+  }
+  const overwrittenChannels = channels.filter(channel =>
+    Array.isArray(channel.permission_overwrites) && channel.permission_overwrites.length > 0
+  );
+  if (overwrittenChannels.length) {
+    findings.push({
+      severity: 'warning',
+      code: 'channel-overwrites',
+      message: `${overwrittenChannels.length} channel(s) have custom permission overwrites. Review their effective access in Discord; this audit does not calculate member visibility.`
+    });
+  }
+  if (uncategorizedChannels.length) {
+    findings.push({
+      severity: 'info',
+      code: 'uncategorized-channels',
+      message: `${uncategorizedChannels.length} channel(s) are not under a category.`
+    });
+  }
+  const emptyCategories = categoryReports.filter(category => category.channels.length === 0);
+  if (emptyCategories.length) {
+    findings.push({
+      severity: 'info',
+      code: 'empty-categories',
+      message: `Empty categories were found: ${emptyCategories.map(category => category.name).join(', ')}.`
+    });
+  }
+  if (!findings.length) {
+    findings.push({
+      severity: 'info',
+      code: 'no-structural-findings',
+      message: 'No structural review findings were detected by this limited inventory.'
+    });
+  }
+
+  return {
+    summary: {
+      roleCount: roles.length,
+      categoryCount: categories.length,
+      channelCount: nonCategoryChannels.length,
+      textChannelCount: channels.filter(channel => channel.type === 0).length,
+      voiceChannelCount: channels.filter(channel => channel.type === 2).length
+    },
+    findings,
+    roles: roleReviews,
+    categories: categoryReports,
+    uncategorizedChannels,
+    scopeNote: 'Read-only structural inventory only. It does not calculate effective member visibility, inspect member assignments, review messages, or change Discord.'
+  };
+}
+
 export function hasPermission(value, bit) {
   const permissions = BigInt(value || '0');
   return (permissions & 8n) !== 0n || (permissions & BigInt(bit)) !== 0n;

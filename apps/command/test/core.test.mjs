@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { makePlan, validateStructure, canManage, hasPermission, validateId, applyPlan, createGuildLock } from '../core.mjs';
+import { makePlan, validateStructure, canManage, hasPermission, validateId, applyPlan, createGuildLock, auditGuild } from '../core.mjs';
 
 test('server permissions use BigInt, support owner/admin, and reject ordinary members', () => {
   assert.equal(canManage({ permissions: '32' }), true);
@@ -109,4 +109,32 @@ test('AI-import-shaped structures remain untrusted and reject extra instructions
   assert.throws(() => validateStructure({ roles: valid.roles, categories: [{ name: 'Community', channels: ['general', 'General'] }] }), /lowercase/);
   assert.throws(() => validateStructure({ roles: valid.roles, categories: [{ name: 'Community', channels: Array(31).fill(0).map((_, i) => 'channel-' + i) }] }), /at most 30 channels/);
   assert.throws(() => validateStructure({ roles: valid.roles, categories: Array(20).fill(0).map((_, i) => ({ name: 'Category ' + i, channels: Array(5).fill(0).map((_, j) => 'channel-' + j + '-' + i) })) }), /100 total objects/);
+});
+
+test('read-only server audit inventories roles and channels and flags review items', () => {
+  const roles = [
+    { id: 'everyone', name: '@everyone', permissions: '0' },
+    { id: 'admin', name: 'Admin', permissions: '8' },
+    { id: 'admin-duplicate', name: 'admin', permissions: '0' },
+    { id: 'integration', name: 'Bot Integration', permissions: String(1n << 28n), managed: true }
+  ];
+  const channels = [
+    { id: 'community', name: 'Community', type: 4, permission_overwrites: [] },
+    { id: 'general', name: 'general', type: 0, parent_id: 'community', permission_overwrites: [{ id: 'role' }] },
+    { id: 'voice', name: 'voice-lounge', type: 2, permission_overwrites: [] },
+    { id: 'empty', name: 'Empty', type: 4, permission_overwrites: [] }
+  ];
+  const audit = auditGuild(roles, channels);
+  assert.deepEqual(audit.summary, {
+    roleCount: 4, categoryCount: 2, channelCount: 2, textChannelCount: 1, voiceChannelCount: 1
+  });
+  assert.equal(audit.roles.find(role => role.name === 'Admin').elevatedPermissions, true);
+  assert.deepEqual(audit.categories[0].channels.map(channel => channel.name), ['general']);
+  assert.deepEqual(audit.uncategorizedChannels.map(channel => channel.name), ['voice-lounge']);
+  assert.ok(audit.findings.some(item => item.code === 'elevated-roles'));
+  assert.ok(audit.findings.some(item => item.code === 'duplicate-role-names'));
+  assert.ok(audit.findings.some(item => item.code === 'managed-roles'));
+  assert.ok(audit.findings.some(item => item.code === 'channel-overwrites'));
+  assert.ok(audit.findings.some(item => item.code === 'empty-categories'));
+  assert.match(audit.scopeNote, /does not calculate effective member visibility/);
 });

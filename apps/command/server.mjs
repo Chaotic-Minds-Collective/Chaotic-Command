@@ -4,7 +4,7 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomBytes, createHash, createCipheriv, createDecipheriv, timingSafeEqual } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
-import { HttpError, templates, hasPermission, canManage, validateId, validateStructure, makePlan, applyPlan, createGuildLock } from './core.mjs';
+import { HttpError, templates, hasPermission, canManage, validateId, validateStructure, auditGuild, makePlan, applyPlan, createGuildLock } from './core.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const random = () => randomBytes(32).toString('hex');
@@ -221,9 +221,14 @@ export function createApp(config = {}) {
         }
         throw new HttpError(405, 'Method not allowed.');
       }
-      const match = /^\/api\/guilds\/(\d{17,20})\/(status|notes|preview|apply)$/.exec(path);
+      const match = /^\/api\/guilds\/(\d{17,20})\/(status|audit|notes|preview|apply)$/.exec(path);
       if (!match) throw new HttpError(404, 'Not found.');
       const [, id, action] = match;
+      if (action === 'audit') {
+        if (req.method !== 'GET') throw new HttpError(405, 'Method not allowed.');
+        const state = await snapshot(session, id);
+        return json(res, 200, auditGuild(state.roles, state.channels));
+      }
       if (action === 'status' && req.method === 'GET') {
         const state = await snapshot(session, id);
         const params = new URLSearchParams({ client_id: env.DISCORD_CLIENT_ID, scope: 'bot', permissions: '268435472', guild_id: id, disable_guild_select: 'true' });
