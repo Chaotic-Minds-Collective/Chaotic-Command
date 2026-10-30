@@ -35,6 +35,56 @@ function customStructure() {
   if (!categories.length) throw new Error('Add at least one category using the Category | channel-one, channel-two format.');
   return { roles, categories };
 }
+async function refreshSavedStructures(selectedId = '') {
+  const data = await api('/api/structures');
+  options($('saved-structures'), data.structures, 'Choose a saved structure');
+  if (selectedId) $('saved-structures').value = selectedId;
+  $('saved-structure-count').textContent = `${data.structures.length} of 20 personal structures saved.`;
+}
+async function loadSavedStructure() {
+  const id = $('saved-structures').value;
+  if (!id) throw new Error('Choose a saved structure first.');
+  const saved = await api(`/api/structures/${id}`);
+  $('custom-roles').value = saved.data.roles.join('\\n');
+  $('custom-categories').value = saved.data.categories.map(category =>
+    category.name + ' | ' + category.channels.join(', ')
+  ).join('\\n');
+  $('template').value = 'custom';
+  showCustomBuilder();
+  $('saved-structure-name').value = saved.structure.name;
+  $('saved-structure-status').textContent = `Loaded "${saved.structure.name}" into the editor. Review it and preview before applying. No Discord changes have been made.`;
+  message('Personal structure loaded into the editor.');
+}
+async function saveSavedStructure() {
+  const name = $('saved-structure-name').value;
+  const structure = customStructure();
+  const saved = await api('/api/structures', { name, structure });
+  await refreshSavedStructures(saved.structure.id);
+  $('saved-structure-name').value = saved.structure.name;
+  $('saved-structure-status').textContent = `Saved "${saved.structure.name}" as a new personal structure.`;
+  message('Personal structure saved.');
+}
+async function renameSavedStructure() {
+  const id = $('saved-structures').value;
+  if (!id) throw new Error('Choose a saved structure to rename.');
+  const saved = await api(`/api/structures/${id}/rename`, { name: $('saved-structure-name').value });
+  await refreshSavedStructures(id);
+  $('saved-structure-name').value = saved.structure.name;
+  $('saved-structure-status').textContent = `Renamed personal structure to "${saved.structure.name}".`;
+  message('Personal structure renamed.');
+}
+async function deleteSavedStructure() {
+  const id = $('saved-structures').value;
+  if (!id) throw new Error('Choose a saved structure to delete.');
+  if (!window.confirm('Delete this saved personal structure? This does not change any Discord server.')) {
+    message('Delete cancelled.'); return;
+  }
+  await api(`/api/structures/${id}/delete`, {});
+  $('saved-structure-name').value = '';
+  await refreshSavedStructures();
+  $('saved-structure-status').textContent = 'Saved personal structure deleted. No Discord server was changed.';
+  message('Personal structure deleted.');
+}
 function showCustomBuilder() {
   const custom = $('template').value === 'custom';
   $('custom-builder').hidden = !custom;
@@ -188,6 +238,14 @@ $('apply').onclick = () => run(async () => {
   $('result').textContent = result.completed.map(step => `${step.action}: ${step.kind} ${step.name} (${step.id})`).join('\n');
   message(result.error ? `Partially completed: ${result.error} Preview again to reuse completed work.` : 'Setup complete. Changes are now in Discord.');
 });
+$('load-saved-structure').onclick = () => run(loadSavedStructure);
+$('save-saved-structure').onclick = () => run(saveSavedStructure);
+$('rename-saved-structure').onclick = () => run(renameSavedStructure);
+$('delete-saved-structure').onclick = () => run(deleteSavedStructure);
+$('saved-structures').onchange = () => {
+  const selectedOption = $('saved-structures').selectedOptions[0];
+  if (selectedOption?.value) $('saved-structure-name').value = selectedOption.textContent;
+};
 $('save-notes').onclick = () => run(async () => {
   requireGuild(); await api(`/api/guilds/${selected}/notes`, { notes: $('notes').value }); message('Server notes saved.');
 });
@@ -200,6 +258,7 @@ run(async () => {
   if (!session.user) { message('Not connected to Discord.'); return; }
   $('user').textContent = `Signed in as ${session.user.username}`;
   options($('template'), (await api('/api/templates')).templates);
+  await refreshSavedStructures();
   $('template').add(new Option('Custom structure', 'custom'));
   await loadGuilds();
 });
