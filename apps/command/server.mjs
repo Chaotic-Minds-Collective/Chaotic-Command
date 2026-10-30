@@ -182,8 +182,13 @@ export function createApp(config = {}) {
       if (req.method !== 'POST') throw new HttpError(405, 'Method not allowed.');
       const data = await body(req);
       if (action === 'preview') {
+        const hasTemplate = typeof data.templateId === 'string';
+        const hasStructure = Object.hasOwn(data, 'structure');
+        if (Object.keys(data).some(key => !['templateId', 'structure'].includes(key)) || hasTemplate === hasStructure) {
+          throw new HttpError(400, 'Provide exactly one built-in template ID or custom structure.');
+        }
         const state = await snapshot(session, id);
-        const requested = data.templateId ? data.templateId : data.structure;
+        const requested = hasTemplate ? data.templateId : data.structure;
         const plan = makePlan(requested, state.roles, state.channels);
         session.preview = { id, plan, nonce: random(), expires: Date.now() + 5 * 60000 };
         persist(); return json(res, 200, { ...plan, nonce: session.preview.nonce, expires: session.preview.expires });
