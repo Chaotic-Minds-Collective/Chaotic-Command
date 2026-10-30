@@ -45,7 +45,7 @@ async function loadSavedStructure() {
   const id = $('saved-structures').value;
   if (!id) throw new Error('Choose a saved structure first.');
   const saved = await api(`/api/structures/${id}`);
-  $('custom-roles').value = saved.data.roles.join('\\n');
+  $('custom-roles').value = saved.data.roles.join('\n');
   $('custom-categories').value = saved.data.categories.map(category =>
     category.name + ' | ' + category.channels.join(', ')
   ).join('\\n');
