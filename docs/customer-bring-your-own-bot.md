@@ -139,3 +139,9 @@ Reset the token in the Discord Developer Portal, remove the old credential from 
 Chaotic Command stores the bot's Discord ID, display name, and an encrypted bot token associated with your signed-in Discord account. Bot credentials are encrypted at rest using AES-256-GCM. The token is never included in the bot-list response.
 
 Only connect bots through the HTTPS Chaotic Command site. Your Discord bot and application remain under your control.
+
+## Changing bots after a preview
+
+If you change the selected bot after creating a setup preview, create and review a fresh preview before applying. Chaotic Command rejects a stale preview even if the proposed channel names are unchanged. Changes to the server's roles, channel layout, or permission overwrites can also require a new preview.
+
+If setup is already running, it continues with the bot that was checked for that operation; a new selection applies to the next operation. Changing a selection does not cancel running setup. Always inspect a partial-progress report before retrying.

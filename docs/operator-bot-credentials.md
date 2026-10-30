@@ -78,3 +78,13 @@ Automated tests use mocked Discord API responses. They do not replace live accep
 - New channels may be visible to members according to existing server/category visibility.
 - The read-only audit does not calculate effective member visibility and is not a complete security assessment.
 - The application is single-instance because its setup lock is process-local.
+
+## Preview binding and in-flight bot changes
+
+A setup preview is bound to the selected stored credential ID and Discord bot ID. Switching the default or per-server bot after preview requires a new preview; apply rejects the stale confirmation before any Discord writes. This is enforced server-side, including per-server assignment changes from another session.
+
+Each snapshot and apply operation captures one bot credential. Changing an assignment while an apply is already running does not switch the credentials used by the remaining writes. The assignment affects the next operation; it does not cancel an active operation. Removal from local storage is not Discord token revocation. Revoke a compromised token in the Discord Developer Portal.
+
+The preview fingerprint covers the canonical role/channel inventory, including role permissions, positions, parent relationships, and channel/category permission overwrites. Inventory order alone does not invalidate it. A changed inventory requires a fresh review. These checks do not calculate effective member visibility, make Discord writes transactional, or prevent external changes after the final preflight. Run one process/replica only.
+
+Offline regression coverage includes default-bot changes, cross-session per-server bot changes, in-flight credential consistency, permission-context changes, order-independent fingerprints, and apply rejection after overwrite drift. Live acceptance remains a separate approval-gated activity.

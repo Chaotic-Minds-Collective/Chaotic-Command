@@ -83,7 +83,7 @@ test('full offline OAuth, notes, CSRF, preview, apply, replay prevention and log
 });
 test('authorization and bot permissions are rechecked; drift invalidates preview', async t => {
   const f = await setup(t);
-  f.setAllowed(false); assert.equal((await f.request(path('notes'), { notes: 'saved' })).status, 403);
+  f.setAllowed(false); assert.equal((await f.request(path('notes'))).status, 403);
   f.setAllowed(true); f.setBotAllowed(false);
   assert.equal((await f.request(path('preview'), { templateId: 'community' })).status, 403);
   f.setBotAllowed(true);
