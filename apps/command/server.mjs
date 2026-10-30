@@ -219,9 +219,30 @@ export function createApp(config = {}) {
         const row = db.prepare('SELECT id FROM user_bots WHERE id = ? AND owner_id = ?').get(id, session.user.id);
         if (!row) throw new HttpError(404, 'Connected bot not found.');
         db.prepare('DELETE FROM user_bots WHERE id = ? AND owner_id = ?').run(id, session.user.id);
+        db.prepare('DELETE FROM guild_bot_selections WHERE owner_id = ? AND bot_id = ?').run(session.user.id, id);
         if (session.selectedBotId === id) delete session.selectedBotId;
         persist();
         return json(res, 200, { ok: true });
+      }
+      const guildBotMatch = /^\\/api\\/guilds\\/(\\d{17,20})\\/bot$/.exec(path);
+      if (guildBotMatch) {
+        const guildId = guildBotMatch[1];
+        await authorize(session, guildId);
+        if (req.method === 'GET') {
+          const assignment = db.prepare('SELECT bot_id FROM guild_bot_selections WHERE owner_id = ? AND guild_id = ?').get(session.user.id, guildId);
+          return json(res, 200, { selectedBotId: assignment?.bot_id || session.selectedBotId || (sharedBotConfigured ? 'shared' : '') });
+        }
+        if (req.method === 'POST') {
+          const data = await body(req);
+          if (!data || typeof data !== 'object' || Array.isArray(data) || Object.keys(data).length !== 1 || typeof data.id !== 'string') throw new HttpError(400, 'Choose a connected bot for this server.');
+          if (data.id === 'shared' && sharedBotConfigured) {
+            db.prepare('INSERT OR REPLACE INTO guild_bot_selections (owner_id, guild_id, bot_id) VALUES (?, ?, ?)').run(session.user.id, guildId, 'shared');
+          } else if (db.prepare('SELECT 1 FROM user_bots WHERE id = ? AND owner_id = ?').get(data.id, session.user.id)) {
+            db.prepare('INSERT OR REPLACE INTO guild_bot_selections (owner_id, guild_id, bot_id) VALUES (?, ?, ?)').run(session.user.id, guildId, data.id);
+          } else throw new HttpError(404, 'Connected bot not found or not available.');
+          return json(res, 200, { selectedBotId: data.id });
+        }
+        throw new HttpError(405, 'Method not allowed.');
       }
       if (req.method === 'GET' && path === '/api/guilds') return json(res, 200, { guilds: await guilds(session) });
       if (req.method === 'GET' && path === '/api/templates') return json(res, 200, { templates });
