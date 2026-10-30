@@ -71,7 +71,12 @@ async function selectBot() {
   if (selected) await api(`/api/guilds/${selected}/bot`, { id });
   else await api('/api/bots/select', { id: id === 'shared' ? null : id });
   await refreshBots();
-  if (selected) $('active-bot').value = (await api(`/api/guilds/${selected}/bot`)).selectedBotId || '';
+  if (selected) {
+    const assignment = await api(`/api/guilds/${selected}/bot`);
+    $('active-bot').value = assignment.selectedBotId || '';
+    window.commandInviteBase = assignment.inviteUrl || '';
+    updateInviteLink();
+  }
   message(selected ? 'Bot assignment saved for this server.' : 'Default bot updated.');
 }
 async function removeBot() {
@@ -207,7 +212,7 @@ async function loadServer() {
   clearPlan(); clearAudit(); selected = $('guild').value; $('notes').value = ''; $('status').textContent = ''; $('invite').removeAttribute('href');
   if (!selected) { message('Choose a server.'); return; }
   const notes = await api(`/api/guilds/${selected}/notes`); $('notes').value = notes.notes;
-  const botChoice = await api(`/api/guilds/${selected}/bot`); $('active-bot').value = botChoice.selectedBotId || '';
+  const botChoice = await api(`/api/guilds/${selected}/bot`); $('active-bot').value = botChoice.selectedBotId || ''; window.commandInviteBase = botChoice.inviteUrl || '';
   try {
     const status = await api(`/api/guilds/${selected}/status`);
     $('status').textContent = `Bot ready. ${status.channels} channels and ${status.roles} roles on this server.`;
