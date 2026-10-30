@@ -25,8 +25,8 @@ function options(el, items, placeholder) {
 }
 function requireGuild() { if (!selected) throw new Error('Choose a server first.'); }
 function customStructure() {
-  const roles = $('custom-roles').value.split('\\n').map(value => value.trim()).filter(Boolean);
-  const categories = $('custom-categories').value.split('\\n').map(line => line.trim()).filter(Boolean).map((line, index) => {
+  const roles = $('custom-roles').value.split('\n').map(value => value.trim()).filter(Boolean);
+  const categories = $('custom-categories').value.split('\n').map(line => line.trim()).filter(Boolean).map((line, index) => {
     const separator = line.indexOf('|');
     if (separator < 1) throw new Error(`Category line ${index + 1} must use: Category name | channel-one, channel-two`);
     return { name: line.slice(0, separator).trim(), channels: line.slice(separator + 1).split(',').map(value => value.trim()).filter(Boolean) };
