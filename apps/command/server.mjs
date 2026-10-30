@@ -182,7 +182,7 @@ export function createApp(config = {}) {
         const data = await body(req);
         if (!data || typeof data !== 'object' || Array.isArray(data) || Object.keys(data).length !== 1 || typeof data.token !== 'string') throw new HttpError(400, 'Provide only the bot token.');
         const token = data.token.trim();
-        if (token.length < 20 || token.length > 200 || /[\\s\\u0000-\\u001f\\u007f]/.test(token)) throw new HttpError(400, 'The bot token format is invalid.');
+        if (token.length < 20 || token.length > 200 || /[\s\u0000-\u001f\u007f]/.test(token)) throw new HttpError(400, 'The bot token format is invalid.');
         let identity;
         try { identity = await discord('/users/@me', `Bot ${token}`); }
         catch { throw new HttpError(400, 'Discord could not verify this bot token. Check the Bot Token in your Discord Developer Portal.'); }
@@ -208,7 +208,7 @@ export function createApp(config = {}) {
         persist();
         return json(res, 200, { selectedBotId: session.selectedBotId || 'shared' });
       }
-      const connectedBot = /^\\/api\\/bots\\/([a-f0-9]{32})\\/delete$/.exec(path);
+      const connectedBot = /^\/api\/bots\/([a-f0-9]{32})\/delete$/.exec(path);
       if (connectedBot && req.method === 'POST') {
         const id = connectedBot[1];
         const row = db.prepare('SELECT id FROM user_bots WHERE id = ? AND owner_id = ?').get(id, session.user.id);
