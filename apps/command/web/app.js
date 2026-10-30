@@ -52,7 +52,7 @@ function buildAiPrompt() {
     '"roles" must be an array of 1 to 20 unique role-name strings.',
     '"categories" must be an array of 1 to 20 objects. Each object must contain exactly "name" (a string) and "channels" (an array of channel-name strings).',
     'Each category may contain 0 to 30 channels. The total number of roles, categories, and channels must not exceed 100.',
-    'Role and category names must be 1 to 100 characters. Do not include control characters. Do not use "@everyone" as a role.',
+    'Role and category names must be 1 to 100 characters. Do not include control characters. Category names cannot contain the vertical bar character. Do not use "@everyone" as a role.',
     'Channel names must use lowercase English letters, numbers, hyphens, or underscores, and must start with a letter or number.',
     'Avoid duplicate role names, category names, or channel names within one category.',
     'Do not include permission values, role assignments, private-channel rules, descriptions, IDs, API calls, code, or any other fields.',
@@ -60,7 +60,7 @@ function buildAiPrompt() {
     '',
     'Server requirements:',
     brief
-  ].join('\\n');
+  ].join('\n');
 }
 function importAiStructure() {
   let value;
@@ -70,23 +70,23 @@ function importAiStructure() {
       Object.keys(value).length !== 2 || !Array.isArray(value.roles) || !Array.isArray(value.categories)) {
     throw new Error('The JSON must contain exactly two arrays: roles and categories.');
   }
-  if (!value.roles.every(role => typeof role === 'string' && !/[\\u0000-\\u001f\\u007f]/.test(role))) {
+  if (!value.roles.every(role => typeof role === 'string' && !/[\u0000-\u001f\u007f]/.test(role))) {
     throw new Error('Every role must be a plain text name without line breaks or control characters.');
   }
   if (!value.categories.every(category =>
     category && typeof category === 'object' && !Array.isArray(category) &&
     Object.keys(category).length === 2 && Object.hasOwn(category, 'name') &&
     Object.hasOwn(category, 'channels') && typeof category.name === 'string' &&
-    !/[|\\u0000-\\u001f\\u007f]/.test(category.name) &&
+    !/[|\u0000-\u001f\u007f]/.test(category.name) &&
     Array.isArray(category.channels) &&
-    category.channels.every(channel => typeof channel === 'string' && !/[\\u0000-\\u001f\\u007f]/.test(channel))
+    category.channels.every(channel => typeof channel === 'string' && !/[\u0000-\u001f\u007f]/.test(channel))
   )) {
     throw new Error('Each category must contain only a text name and a list of text channel names.');
   }
-  $('custom-roles').value = value.roles.join('\\n');
+  $('custom-roles').value = value.roles.join('\n');
   $('custom-categories').value = value.categories.map(category =>
     category.name + ' | ' + category.channels.join(', ')
-  ).join('\\n');
+  ).join('\n');
   clearPlan();
   $('ai-status').textContent = 'Imported. Review and edit the names, then preview to run server-side validation. Nothing has been sent to Discord.';
   message('AI structure imported for review. Preview it before applying.');
