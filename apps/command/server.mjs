@@ -230,7 +230,9 @@ export function createApp(config = {}) {
         await authorize(session, guildId);
         if (req.method === 'GET') {
           const assignment = db.prepare('SELECT bot_id FROM guild_bot_selections WHERE owner_id = ? AND guild_id = ?').get(session.user.id, guildId);
-          return json(res, 200, { selectedBotId: assignment?.bot_id || session.selectedBotId || (sharedBotConfigured ? 'shared' : '') });
+          const chosen = selectedBot(session, guildId);
+          const inviteUrl = `https://discord.com/oauth2/authorize?${new URLSearchParams({ client_id: chosen.discordBotId, scope: 'bot', permissions: '268435472' })}`;
+          return json(res, 200, { selectedBotId: chosen.id, inviteUrl });
         }
         if (req.method === 'POST') {
           const data = await body(req);
