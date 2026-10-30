@@ -11,6 +11,10 @@ async function api(path, body) {
 }
 function message(text) { $('message').textContent = text; }
 function clearPlan() { plan = null; $('plan').hidden = true; $('confirmation').value = ''; $('result').textContent = ''; }
+function clearAudit() {
+  $('audit-report').hidden = true;
+  $('audit-report').textContent = '';
+}
 function controls(disabled) { document.querySelectorAll('button, select, input, textarea').forEach(el => { el.disabled = disabled; }); }
 async function run(action) {
   if (busy) return;
@@ -151,13 +155,13 @@ function importAiStructure() {
   message('AI structure imported for review. Preview it before applying.');
 }
 async function loadGuilds() {
-  clearPlan(); selected = ''; $('notes').value = ''; $('status').textContent = ''; $('invite').removeAttribute('href');
+  clearPlan(); clearAudit(); selected = ''; $('notes').value = ''; $('status').textContent = ''; $('invite').removeAttribute('href');
   const data = await api('/api/guilds');
   options($('guild'), data.guilds, 'Choose a server');
   message(data.guilds.length ? 'Select a server to begin.' : 'No manageable servers found. You need Manage Server permission in Discord.');
 }
 async function loadServer() {
-  clearPlan(); selected = $('guild').value; $('notes').value = ''; $('status').textContent = ''; $('invite').removeAttribute('href');
+  clearPlan(); clearAudit(); selected = $('guild').value; $('notes').value = ''; $('status').textContent = ''; $('invite').removeAttribute('href');
   if (!selected) { message('Choose a server.'); return; }
   const notes = await api(`/api/guilds/${selected}/notes`); $('notes').value = notes.notes;
   try {
@@ -172,6 +176,32 @@ async function loadServer() {
     if (window.commandInviteBase) $('invite').href = `${window.commandInviteBase}&guild_id=${selected}&disable_guild_select=true`;
   }
 }
+$('audit').onclick = () => run(async () => {
+  requireGuild();
+  const audit = await api(`/api/guilds/${selected}/audit`);
+  const lines = [
+    `Inventory: ${audit.summary.roleCount} roles, ${audit.summary.categoryCount} categories, ${audit.summary.channelCount} channels (${audit.summary.textChannelCount} text, ${audit.summary.voiceChannelCount} voice).`,
+    '',
+    'Findings:',
+    ...audit.findings.map(item => `[${item.severity.toUpperCase()}] ${item.message}`),
+    '',
+    'Role review:',
+    ...audit.roles.map(role => `- ${role.name}: ${role.permissionFlags.length ? role.permissionFlags.join(', ') : 'No recognized permissions'}${role.elevatedPermissions ? ' [REVIEW elevated or unrecognized permissions]' : ''}${role.managed ? ' [managed by integration]' : ''}`),
+    '',
+    'Category layout:',
+    ...audit.categories.map(category => `- ${category.name}: ${category.channels.length ? category.channels.map(channel => `${channel.name} (${channel.type}${channel.permissionOverwriteCount ? `, ${channel.permissionOverwriteCount} custom overwrites` : ''})`).join(', ') : 'No channels'}`),
+    '',
+    'Channels outside categories:',
+    ...(audit.uncategorizedChannels.length
+      ? audit.uncategorizedChannels.map(channel => `- ${channel.name} (${channel.type}${channel.permissionOverwriteCount ? `, ${channel.permissionOverwriteCount} custom overwrites` : ''})`)
+      : ['None detected.']),
+    '',
+    audit.scopeNote
+  ];
+  $('audit-report').textContent = lines.join('\n');
+  $('audit-report').hidden = false;
+  message('Read-only audit complete. No Discord changes have been made.');
+});
 $('refresh').onclick = () => run(loadGuilds);
 $('guild').onchange = () => run(loadServer);
 $('template').onchange = showCustomBuilder;

@@ -112,6 +112,9 @@ test('mocked Discord OAuth, CSRF, preview, apply and stale-plan rejection work e
   assert.deepEqual((await guilds.json()).guilds, [{ id: guildId, name: 'Disposable Test Server' }]);
   let response = await fetch(`${url}/api/guilds/555555555555555555/notes`, { headers: { Cookie: cookie } });
   assert.equal(response.status, 403, 'notes must be unavailable without Manage Server');
+  response = await fetch(`${url}/api/guilds/555555555555555555/audit`, { headers: { Cookie: cookie } });
+  assert.equal(response.status, 403, 'audit must be unavailable without Manage Server');
+
   response = await fetch(`${url}/api/guilds/555555555555555555/preview`, {
     method: 'POST', headers, body: JSON.stringify({ templateId: 'community' })
   });
@@ -129,6 +132,15 @@ test('mocked Discord OAuth, CSRF, preview, apply and stale-plan rejection work e
   response = await fetch(`${url}/api/guilds/${guildId}/status`, { headers: { Cookie: cookie } });
   assert.equal(response.status, 200);
   assert.match((await response.json()).inviteUrl, /permissions=268435472/);
+
+  response = await fetch(`${url}/api/guilds/${guildId}/audit`, { headers: { Cookie: cookie } });
+  assert.equal(response.status, 200);
+  const audit = await response.json();
+  assert.equal(audit.summary.roleCount, 2);
+  assert.equal(audit.summary.categoryCount, 0);
+  assert.equal(audit.summary.channelCount, 0);
+  assert.ok(audit.findings.some(item => item.code === 'elevated-roles'), 'the bot role permissions should be visible for review');
+  assert.equal(writes.length, 0, 'read-only audit must not write to Discord');
 
   response = await fetch(`${url}/api/guilds/${guildId}/preview`, {
     method: 'POST', headers, body: JSON.stringify({ templateId: 'community' })

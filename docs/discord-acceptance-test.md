@@ -38,6 +38,16 @@ This is a manual end-to-end test plan for the local Chaotic Command MVP. Automat
 5. In Discord server settings, move the bot's role above the roles the setup will create.
 6. Return to Chaotic Command, reselect the server, and confirm bot preflight succeeds.
 
+## Test the read-only existing-server audit
+
+1. Select the disposable server and run **Audit selected server**.
+2. Confirm the report lists the current role, category, and channel counts.
+3. Confirm the existing bot role's elevated permissions are visible for review.
+4. Add a category, a text channel with a permission overwrite, an uncategorized voice channel, and an empty category in the disposable server. Run the audit again.
+5. Confirm the report identifies custom channel overwrites, channels outside categories, and empty categories.
+6. Confirm the report explains that it does not calculate effective member visibility.
+7. Confirm the audit did not create, edit, or delete any Discord objects.
+
 ## Test preview without writes
 
 1. Choose the Community template and select Preview changes.
