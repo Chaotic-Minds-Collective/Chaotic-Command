@@ -231,6 +231,21 @@ test('personal saved structures are validated and isolated by Discord account', 
   assert.equal(response.status, 409, 'template names are unique case-insensitively per owner');
 
   response = await fetch(`${url}/api/structures`, {
+    method: 'POST', headers: headers(a), body: JSON.stringify({ name: 'Café', structure })
+  });
+  assert.equal(response.status, 201, 'Unicode names should be accepted');
+
+  response = await fetch(`${url}/api/structures`, {
+    method: 'POST', headers: headers(a), body: JSON.stringify({ name: 'CAFE\\u0301', structure })
+  });
+  assert.equal(response.status, 409, 'Unicode names should be normalized and compared case-insensitively');
+
+  response = await fetch(`${url}/api/structures/${created.id}/rename`, {
+    method: 'POST', headers: headers(a), body: JSON.stringify({ name: 'CAFÉ' })
+  });
+  assert.equal(response.status, 409, 'rename must enforce Unicode case-insensitive uniqueness');
+
+  response = await fetch(`${url}/api/structures`, {
     method: 'POST', headers: headers(a), body: JSON.stringify({ name: 'Invalid', structure: { ...structure, permissions: '8' } })
   });
   assert.equal(response.status, 400, 'unsupported structure fields must be rejected');
