@@ -18,7 +18,9 @@ export function createApp(config = {}) {
   const fetcher = config.fetch || globalThis.fetch;
   const origin = new URL(env.APP_ORIGIN || 'http://localhost:3000').origin;
   const secure = origin.startsWith('https:');
-  const configured = Boolean(env.DISCORD_CLIENT_ID && env.DISCORD_CLIENT_SECRET && env.DISCORD_BOT_TOKEN);
+  const oauthConfigured = Boolean(env.DISCORD_CLIENT_ID && env.DISCORD_CLIENT_SECRET);
+  const sharedBotConfigured = Boolean(env.DISCORD_BOT_TOKEN);
+  const configured = oauthConfigured;
   if (env.NODE_ENV === 'production' && !secure) throw new Error('Production APP_ORIGIN must use HTTPS.');
   if ((configured || env.NODE_ENV === 'production') && (env.SESSION_SECRET || '').length < 32) throw new Error('Set SESSION_SECRET to at least 32 random characters.');
   const key = createHash('sha256').update(env.SESSION_SECRET || random()).digest();
