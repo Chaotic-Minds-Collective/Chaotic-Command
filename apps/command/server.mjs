@@ -4,10 +4,11 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomBytes, createHash, createCipheriv, createDecipheriv, timingSafeEqual } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
-import { HttpError, templates, hasPermission, canManage, validateId, makePlan, applyPlan, createGuildLock } from './core.mjs';
+import { HttpError, templates, hasPermission, canManage, validateId, validateStructure, makePlan, applyPlan, createGuildLock } from './core.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const random = () => randomBytes(32).toString('hex');
+const structureNameKey = value => value.normalize('NFKC').toLowerCase();
 const equal = (a, b) => typeof a === 'string' && typeof b === 'string' && Buffer.byteLength(a) === Buffer.byteLength(b) && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 const HOUR = 3600000;
 
@@ -24,7 +25,7 @@ export function createApp(config = {}) {
   const dbPath = config.dbPath || resolve(env.DATA_DIR || '.data', 'command.sqlite');
   if (dbPath !== ':memory:') mkdirSync(dirname(dbPath), { recursive: true, mode: 0o700 });
   const db = new DatabaseSync(dbPath);
-  db.exec('PRAGMA journal_mode=WAL; CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, data TEXT NOT NULL, expires INTEGER NOT NULL); CREATE TABLE IF NOT EXISTS notes (guild TEXT PRIMARY KEY, value TEXT NOT NULL);');
+  db.exec(`PRAGMA journal_mode=WAL; CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, data TEXT NOT NULL, expires INTEGER NOT NULL); CREATE TABLE IF NOT EXISTS notes (guild TEXT PRIMARY KEY, value TEXT NOT NULL); CREATE TABLE IF NOT EXISTS saved_structures (id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, name TEXT NOT NULL, structure_json TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL); CREATE UNIQUE INDEX IF NOT EXISTS saved_structures_owner_name ON saved_structures(owner_id, name COLLATE NOCASE);`);
   const lock = createGuildLock();
   const encrypt = value => {
     const iv = randomBytes(12), cipher = createCipheriv('aes-256-gcm', key, iv);
@@ -162,6 +163,64 @@ export function createApp(config = {}) {
       ensureConfigured();
       if (req.method === 'GET' && path === '/api/guilds') return json(res, 200, { guilds: await guilds(session) });
       if (req.method === 'GET' && path === '/api/templates') return json(res, 200, { templates });
+      // Personal structures are scoped exclusively to the authenticated Discord account.
+      if (path === '/api/structures' && req.method === 'GET') {
+        const rows = db.prepare('SELECT id, name, created_at, updated_at FROM saved_structures WHERE owner_id = ? ORDER BY updated_at DESC, name COLLATE NOCASE').all(session.user.id);
+        return json(res, 200, { structures: rows });
+      }
+      if (path === '/api/structures' && req.method === 'POST') {
+        const data = await body(req);
+        if (!data || typeof data !== 'object' || Array.isArray(data)) throw new HttpError(400, 'Template data must be an object.');
+        if (Object.keys(data).some(key => !['name', 'structure'].includes(key)) || !Object.hasOwn(data, 'name') || !Object.hasOwn(data, 'structure')) {
+          throw new HttpError(400, 'Provide only a template name and structure.');
+        }
+        if (typeof data.name !== 'string') throw new HttpError(400, 'Template name must be text.');
+        const name = data.name.trim();
+        if (!name || name.length > 60 || /[\u0000-\u001f\u007f]/.test(name)) throw new HttpError(400, 'Template name must contain 1 to 60 valid characters.');
+        const structure = validateStructure(data.structure);
+        const count = db.prepare('SELECT COUNT(*) AS count FROM saved_structures WHERE owner_id = ?').get(session.user.id).count;
+        if (count >= 20) throw new HttpError(409, 'You can save up to 20 personal structures. Delete one before saving another.');
+        const nameKey = structureNameKey(name);
+        const existingNames = db.prepare('SELECT name FROM saved_structures WHERE owner_id = ?').all(session.user.id);
+        if (existingNames.some(row => structureNameKey(row.name) === nameKey)) {
+          throw new HttpError(409, 'You already have a saved structure with that name. Rename it or choose another name.');
+        }
+        const id = randomBytes(16).toString('hex'), now = Date.now();
+        db.prepare('INSERT INTO saved_structures (id, owner_id, name, structure_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)').run(id, session.user.id, name, JSON.stringify(structure), now, now);
+        return json(res, 201, { structure: { id, name, created_at: now, updated_at: now } });
+      }
+      const savedMatch = /^\/api\/structures\/([a-f0-9]{32})(?:\/(rename|delete))?$/.exec(path);
+      if (savedMatch) {
+        const [, structureId, action] = savedMatch;
+        const row = db.prepare('SELECT id, owner_id, name, structure_json, created_at, updated_at FROM saved_structures WHERE id = ? AND owner_id = ?').get(structureId, session.user.id);
+        if (!row) throw new HttpError(404, 'Saved structure not found.');
+        if (req.method === 'GET' && !action) {
+          let structure;
+          try { structure = validateStructure(JSON.parse(row.structure_json)); }
+          catch { throw new HttpError(500, 'This saved structure could not be loaded because its stored data is invalid.'); }
+          return json(res, 200, { structure: { id: row.id, name: row.name, created_at: row.created_at, updated_at: row.updated_at }, data: structure });
+        }
+        if (req.method === 'POST' && action === 'rename') {
+          const data = await body(req);
+          if (!data || typeof data !== 'object' || Array.isArray(data)) throw new HttpError(400, 'Template name must be an object field.');
+          if (Object.keys(data).some(key => key !== 'name') || typeof data.name !== 'string') throw new HttpError(400, 'Provide only the new template name.');
+          const name = data.name.trim();
+        if (!name || name.length > 60 || /[\u0000-\u001f\u007f]/.test(name)) throw new HttpError(400, 'Template name must contain 1 to 60 valid characters.');
+          const nameKey = structureNameKey(name);
+          const existingNames = db.prepare('SELECT name FROM saved_structures WHERE owner_id = ? AND id <> ?').all(session.user.id, structureId);
+          if (existingNames.some(row => structureNameKey(row.name) === nameKey)) {
+            throw new HttpError(409, 'You already have a saved structure with that name.');
+          }
+          const now = Date.now();
+          db.prepare('UPDATE saved_structures SET name = ?, updated_at = ? WHERE id = ? AND owner_id = ?').run(name, now, structureId, session.user.id);
+          return json(res, 200, { structure: { id: row.id, name, created_at: row.created_at, updated_at: now } });
+        }
+        if (req.method === 'POST' && action === 'delete') {
+          db.prepare('DELETE FROM saved_structures WHERE id = ? AND owner_id = ?').run(structureId, session.user.id);
+          return json(res, 200, { ok: true });
+        }
+        throw new HttpError(405, 'Method not allowed.');
+      }
       const match = /^\/api\/guilds\/(\d{17,20})\/(status|notes|preview|apply)$/.exec(path);
       if (!match) throw new HttpError(404, 'Not found.');
       const [, id, action] = match;

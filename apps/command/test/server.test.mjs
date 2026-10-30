@@ -15,12 +15,12 @@ const credentials = {
   DISCORD_BOT_TOKEN: 'private-bot-token',
   SESSION_SECRET: 'test-session-secret-at-least-32-characters'
 };
-async function signIn(url) {
+async function signIn(url, code = 'test-code') {
   const start = await fetch(`${url}/auth/discord`, { redirect: 'manual' });
   assert.equal(start.status, 302);
   const state = new URL(start.headers.get('location')).searchParams.get('state');
   const initialCookie = start.headers.get('set-cookie').split(';')[0];
-  const callback = await fetch(`${url}/auth/callback?state=${state}&code=test-code`, {
+  const callback = await fetch(`${url}/auth/callback?state=${state}&code=${code}`, {
     redirect: 'manual', headers: { Cookie: initialCookie }
   });
   assert.equal(callback.status, 302);
@@ -169,4 +169,132 @@ test('mocked Discord OAuth, CSRF, preview, apply and stale-plan rejection work e
   });
   assert.equal(response.status, 409);
   assert.equal(writes.length, 7, 'stale preview must not send Discord writes');
+});
+
+test('personal saved structures are validated and isolated by Discord account', async t => {
+  const writes = [];
+  const mockDiscord = async (input, options = {}) => {
+    const url = new URL(input);
+    if (url.pathname === '/api/v10/oauth2/token' && options.method === 'POST') {
+      const code = new URLSearchParams(options.body).get('code');
+      return json({ access_token: `token-${code}`, expires_in: 3600 });
+    }
+    if (url.pathname === '/api/v10/users/@me') {
+      const token = options.headers?.Authorization || '';
+      if (token === 'Bearer token-account-a') return json({ id: '111111111111111111', username: 'account-a' });
+      if (token === 'Bearer token-account-b') return json({ id: '222222222222222222', username: 'account-b' });
+    }
+    writes.push({ input, options });
+    throw new Error('Saved structure actions must not call Discord APIs.');
+  };
+  const { url } = await fixture(t, credentials, mockDiscord);
+  const a = await signIn(url, 'account-a');
+  const b = await signIn(url, 'account-b');
+  const headers = auth => ({ Cookie: auth.cookie, Origin: 'http://localhost:3000', 'Content-Type': 'application/json', 'X-CSRF-Token': auth.csrf });
+  const structure = { roles: ['Member', 'Moderator'], categories: [{ name: 'Community', channels: ['welcome', 'general'] }] };
+
+  let response = await fetch(`${url}/api/structures`, { headers: { Cookie: a.cookie } });
+  assert.equal(response.status, 200);
+  assert.deepEqual((await response.json()).structures, []);
+
+  response = await fetch(`${url}/api/structures`, {
+    method: 'POST', headers: headers(a), body: JSON.stringify({ name: 'Gaming Hub', structure })
+  });
+  assert.equal(response.status, 201);
+  const created = (await response.json()).structure;
+  assert.match(created.id, /^[a-f0-9]{32}$/);
+
+  response = await fetch(`${url}/api/structures`, { headers: { Cookie: b.cookie } });
+  assert.equal(response.status, 200);
+  assert.deepEqual((await response.json()).structures, [], 'another Discord account must not see the template');
+
+  response = await fetch(`${url}/api/structures/${created.id}`, { headers: { Cookie: b.cookie } });
+  assert.equal(response.status, 404, 'another Discord account must not load the template');
+  response = await fetch(`${url}/api/structures/${created.id}/rename`, {
+    method: 'POST', headers: headers(b), body: JSON.stringify({ name: 'Stolen' })
+  });
+  assert.equal(response.status, 404, 'another Discord account must not rename the template');
+  response = await fetch(`${url}/api/structures/${created.id}/delete`, {
+    method: 'POST', headers: headers(b), body: '{}'
+  });
+  assert.equal(response.status, 404, 'another Discord account must not delete the template');
+
+  response = await fetch(`${url}/api/structures/${created.id}`, { headers: { Cookie: a.cookie } });
+  assert.equal(response.status, 200);
+  const loaded = await response.json();
+  assert.equal(loaded.structure.name, 'Gaming Hub');
+  assert.deepEqual(loaded.data, structure);
+
+  response = await fetch(`${url}/api/structures`, {
+    method: 'POST', headers: headers(a), body: JSON.stringify({ name: 'gaming hub', structure })
+  });
+  assert.equal(response.status, 409, 'template names are unique case-insensitively per owner');
+
+  response = await fetch(`${url}/api/structures`, {
+    method: 'POST', headers: headers(a), body: JSON.stringify({ name: 'Café', structure })
+  });
+  assert.equal(response.status, 201, 'Unicode names should be accepted');
+
+  response = await fetch(`${url}/api/structures`, {
+    method: 'POST', headers: headers(a), body: JSON.stringify({ name: 'CAFE\u0301', structure })
+  });
+  assert.equal(response.status, 409, 'Unicode names should be normalized and compared case-insensitively');
+
+  response = await fetch(`${url}/api/structures/${created.id}/rename`, {
+    method: 'POST', headers: headers(a), body: JSON.stringify({ name: 'CAFÉ' })
+  });
+  assert.equal(response.status, 409, 'rename must enforce Unicode case-insensitive uniqueness');
+
+  response = await fetch(`${url}/api/structures`, {
+    method: 'POST', headers: headers(a), body: JSON.stringify({ name: 'Invalid', structure: { ...structure, permissions: '8' } })
+  });
+  assert.equal(response.status, 400, 'unsupported structure fields must be rejected');
+
+  response = await fetch(`${url}/api/structures/${created.id}/rename`, {
+    method: 'POST', headers: headers(a), body: JSON.stringify({ name: 'My Community' })
+  });
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).structure.name, 'My Community');
+
+  response = await fetch(`${url}/api/structures/${created.id}/delete`, {
+    method: 'POST', headers: headers(a), body: '{}'
+  });
+  assert.equal(response.status, 200);
+  response = await fetch(`${url}/api/structures/${created.id}`, { headers: { Cookie: a.cookie } });
+  assert.equal(response.status, 404);
+  assert.equal(writes.length, 0, 'saving, loading, renaming and deleting templates must not call Discord APIs');
+});
+
+test('personal saved structures enforce name rules, CSRF and per-account capacity', async t => {
+  const mockDiscord = async (input, options = {}) => {
+    const url = new URL(input);
+    if (url.pathname === '/api/v10/oauth2/token' && options.method === 'POST') return json({ access_token: 'token-capacity', expires_in: 3600 });
+    if (url.pathname === '/api/v10/users/@me') return json({ id: '333333333333333333', username: 'capacity-user' });
+    throw new Error('Unexpected Discord API request.');
+  };
+  const { url } = await fixture(t, credentials, mockDiscord);
+  const auth = await signIn(url, 'capacity');
+  const headers = { Cookie: auth.cookie, Origin: 'http://localhost:3000', 'Content-Type': 'application/json', 'X-CSRF-Token': auth.csrf };
+  const structure = { roles: ['Member'], categories: [{ name: 'Community', channels: [] }] };
+
+  let response = await fetch(`${url}/api/structures`, {
+    method: 'POST', headers: { ...headers, 'X-CSRF-Token': '' }, body: JSON.stringify({ name: 'No CSRF', structure })
+  });
+  assert.equal(response.status, 403);
+
+  response = await fetch(`${url}/api/structures`, {
+    method: 'POST', headers, body: JSON.stringify({ name: '   ', structure })
+  });
+  assert.equal(response.status, 400);
+
+  for (let i = 0; i < 20; i++) {
+    response = await fetch(`${url}/api/structures`, {
+      method: 'POST', headers, body: JSON.stringify({ name: `Template ${i + 1}`, structure })
+    });
+    assert.equal(response.status, 201);
+  }
+  response = await fetch(`${url}/api/structures`, {
+    method: 'POST', headers, body: JSON.stringify({ name: 'Template 21', structure })
+  });
+  assert.equal(response.status, 409, 'an account may save no more than 20 personal structures');
 });
