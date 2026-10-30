@@ -99,3 +99,45 @@ test('personal bot connection rejects invalid tokens, non-bot accounts, and miss
   response = await fetch(`${url}/api/bots`, { method: 'POST', headers: headers(auth), body: JSON.stringify({ token: 'valid-but-not-a-bot-token' }) });
   assert.equal(response.status, 400);
 });
+
+test('server audit and preview use the selected personal bot without a shared bot token', async t => {
+  const rawToken = 'customer.bot.token.used.for.discord.calls';
+  const guildId = '123456789012345678';
+  const botId = '987654321098765432';
+  const botRoleId = '333333333333333333';
+  const authorizationHeaders = [];
+  const mockDiscord = async (input, options = {}) => {
+    const url = new URL(input);
+    const authorization = options.headers?.Authorization;
+    authorizationHeaders.push(authorization);
+    if (url.pathname === '/api/v10/oauth2/token' && options.method === 'POST') return json({ access_token: 'customer-user-token', expires_in: 3600 });
+    if (url.pathname === '/api/v10/users/@me' && authorization === 'Bearer customer-user-token') return json({ id: '111111111111111111', username: 'customer' });
+    if (url.pathname === '/api/v10/users/@me' && authorization === 'Bot ' + rawToken) return json({ id: botId, username: 'customer-helper', bot: true });
+    if (url.pathname === '/api/v10/users/@me/guilds') return json([{ id: guildId, name: 'Customer Test Server', owner: true, permissions: '0' }]);
+    if (url.pathname === `/api/v10/guilds/${guildId}/roles` && authorization === 'Bot ' + rawToken) {
+      return json([
+        { id: guildId, name: '@everyone', permissions: '0', managed: false },
+        { id: botRoleId, name: 'Customer Helper', permissions: '268435472', managed: false }
+      ]);
+    }
+    if (url.pathname === `/api/v10/guilds/${guildId}/channels` && authorization === 'Bot ' + rawToken) return json([]);
+    if (url.pathname === `/api/v10/guilds/${guildId}/members/${botId}` && authorization === 'Bot ' + rawToken) return json({ roles: [botRoleId] });
+    throw new Error('Unexpected Discord request: ' + options.method + ' ' + url.pathname + ' (' + authorization + ')');
+  };
+  const { url } = await fixture(t, mockDiscord);
+  const auth = await signIn(url, 'customer');
+  let response = await fetch(`${url}/api/bots`, { method: 'POST', headers: headers(auth), body: JSON.stringify({ token: rawToken }) });
+  assert.equal(response.status, 201);
+
+  response = await fetch(`${url}/api/guilds/${guildId}/status`, { headers: { Cookie: auth.cookie } });
+  assert.equal(response.status, 200);
+  const status = await response.json();
+  assert.equal(new URL(status.inviteUrl).searchParams.get('client_id'), botId);
+
+  response = await fetch(`${url}/api/guilds/${guildId}/preview`, {
+    method: 'POST', headers: headers(auth), body: JSON.stringify({ templateId: 'community' })
+  });
+  assert.equal(response.status, 200);
+  assert.ok((await response.json()).steps.length > 0);
+  assert.ok(authorizationHeaders.filter(value => value === 'Bot ' + rawToken).length >= 5);
+});
