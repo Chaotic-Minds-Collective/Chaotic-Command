@@ -172,6 +172,52 @@ export function createApp(config = {}) {
         res.setHeader('Set-Cookie', cookie('', 0)); return json(res, 200, { ok: true });
       }
       ensureConfigured();
+      if (path === '/api/bots' && req.method === 'GET') {
+        const rows = db.prepare('SELECT id, discord_bot_id, username, created_at FROM user_bots WHERE owner_id = ? ORDER BY created_at DESC').all(session.user.id);
+        const bots = rows.map(row => ({ id: row.id, discordBotId: row.discord_bot_id, username: row.username, createdAt: row.created_at, inviteUrl: `https://discord.com/oauth2/authorize?${new URLSearchParams({ client_id: row.discord_bot_id, scope: 'bot', permissions: '268435472' })}` }));
+        const sharedBot = sharedBotConfigured ? { id: 'shared', username: 'Chaotic Command shared bot', inviteUrl: `https://discord.com/oauth2/authorize?${new URLSearchParams({ client_id: env.DISCORD_CLIENT_ID, scope: 'bot', permissions: '268435472' })}` } : null;
+        return json(res, 200, { bots, selectedBotId: session.selectedBotId || (sharedBotConfigured ? 'shared' : ''), sharedBot });
+      }
+      if (path === '/api/bots' && req.method === 'POST') {
+        const data = await body(req);
+        if (!data || typeof data !== 'object' || Array.isArray(data) || Object.keys(data).length !== 1 || typeof data.token !== 'string') throw new HttpError(400, 'Provide only the bot token.');
+        const token = data.token.trim();
+        if (token.length < 20 || token.length > 200 || /[\\s\\u0000-\\u001f\\u007f]/.test(token)) throw new HttpError(400, 'The bot token format is invalid.');
+        let identity;
+        try { identity = await discord('/users/@me', `Bot ${token}`); }
+        catch { throw new HttpError(400, 'Discord could not verify this bot token. Check the Bot Token in your Discord Developer Portal.'); }
+        if (!identity.bot || !identity.id || !identity.username) throw new HttpError(400, 'That token did not identify a Discord bot account.');
+        const count = db.prepare('SELECT COUNT(*) AS count FROM user_bots WHERE owner_id = ?').get(session.user.id).count;
+        if (count >= 5) throw new HttpError(409, 'You can connect up to five personal bots.');
+        const id = randomBytes(16).toString('hex'), now = Date.now();
+        try {
+          db.prepare('INSERT INTO user_bots (id, owner_id, discord_bot_id, username, token_encrypted, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(id, session.user.id, identity.id, identity.username, encrypt(token), now);
+        } catch (error) {
+          if (String(error).includes('UNIQUE')) throw new HttpError(409, 'That Discord bot is already connected to your account.');
+          throw error;
+        }
+        session.selectedBotId = id; persist();
+        return json(res, 201, { bot: { id, discordBotId: identity.id, username: identity.username, createdAt: now }, selectedBotId: id });
+      }
+      if (path === '/api/bots/select' && req.method === 'POST') {
+        const data = await body(req);
+        if (!data || typeof data !== 'object' || Array.isArray(data) || Object.keys(data).length !== 1 || !Object.hasOwn(data, 'id')) throw new HttpError(400, 'Provide a connected bot ID or null for the shared bot.');
+        if (data.id === null && sharedBotConfigured) delete session.selectedBotId;
+        else if (typeof data.id === 'string' && db.prepare('SELECT 1 FROM user_bots WHERE id = ? AND owner_id = ?').get(data.id, session.user.id)) session.selectedBotId = data.id;
+        else throw new HttpError(404, 'Connected bot not found or not available.');
+        persist();
+        return json(res, 200, { selectedBotId: session.selectedBotId || 'shared' });
+      }
+      const connectedBot = /^\\/api\\/bots\\/([a-f0-9]{32})\\/delete$/.exec(path);
+      if (connectedBot && req.method === 'POST') {
+        const id = connectedBot[1];
+        const row = db.prepare('SELECT id FROM user_bots WHERE id = ? AND owner_id = ?').get(id, session.user.id);
+        if (!row) throw new HttpError(404, 'Connected bot not found.');
+        db.prepare('DELETE FROM user_bots WHERE id = ? AND owner_id = ?').run(id, session.user.id);
+        if (session.selectedBotId === id) delete session.selectedBotId;
+        persist();
+        return json(res, 200, { ok: true });
+      }
       if (req.method === 'GET' && path === '/api/guilds') return json(res, 200, { guilds: await guilds(session) });
       if (req.method === 'GET' && path === '/api/templates') return json(res, 200, { templates });
       // Personal structures are scoped exclusively to the authenticated Discord account.
