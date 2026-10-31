@@ -19,8 +19,8 @@ Open http://localhost:3000. Without credentials, the UI explains configuration a
 
 1. Create an application at https://discord.com/developers/applications.
 2. Under OAuth2, register **exactly** `http://localhost:3000/auth/callback` (or `${APP_ORIGIN}/auth/callback` for your deployment). Set `DISCORD_CLIENT_ID` and `DISCORD_CLIENT_SECRET` in `.env`.
-3. Under Bot, create/reset the bot token and set `DISCORD_BOT_TOKEN`. Do not put tokens in browser code, URLs, GitHub issues, or any `VITE_` variable.
-4. Generate `SESSION_SECRET` with `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"`. Keep it stable across restarts. Changing it invalidates encrypted sessions.
+3. A shared operator bot is optional. If you want to provide one, create/reset its token under Bot and set `DISCORD_BOT_TOKEN`. Customers can connect their own bots through the signed-in app without a shared bot token. Never put tokens in browser code, URLs, GitHub issues, or any `VITE_` variable.
+4. Generate `SESSION_SECRET` with `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"`. Keep it stable across restarts. Changing or losing it makes stored encrypted sessions and customer bot credentials unreadable.
 5. Restart, sign in, and select a server where you have **Manage Server** or Administrator permission. Use the bot installation link in the UI. The bot requests **Manage Channels** and **Manage Roles**, not Administrator. Put its role above roles it will create. No privileged Gateway intents are required; this MVP uses REST only.
 6. Reselect the server, choose a template, and preview. Review every create/reuse item and channel visibility. Type the requested `APPLY <server-id>` confirmation, then accept the final browser confirmation. Only then are Discord writes sent.
 
@@ -52,4 +52,4 @@ The original component design workspace remains under `guildpilot/`, `design/`, 
 
 ## Development verification record
 
-See [the 2026-10-30 development audit](docs/development-audit-2026-10-30.md) for the inspected revision, runtime/prototype distinction, verified tests, integration limits, and next milestone. Setup previews bind the selected bot and canonical role/channel permission context; an active apply uses one captured bot credential. These protections supplement, rather than replace, disposable-server live acceptance.
+See [the 2026-10-30 follow-up development audit](docs/development-audit-2026-10-30-followup.md) for the current inspected revision, merged changes, branch review, documentation status, verification limits, and next milestones. The [original 2026-10-30 audit](docs/development-audit-2026-10-30.md) remains as a historical snapshot. Setup previews bind the selected bot and canonical role/channel permission context; an active apply uses one captured bot credential. These protections supplement, rather than replace, disposable-server live acceptance.
