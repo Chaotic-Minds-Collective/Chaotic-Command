@@ -52,4 +52,4 @@ The original component design workspace remains under `guildpilot/`, `design/`, 
 
 ## Development verification record
 
-See [the 2026-10-30 development audit](docs/development-audit-2026-10-30.md) for the inspected revision, runtime/prototype distinction, verified tests, integration limits, and next milestone. Setup previews bind the selected bot and canonical role/channel permission context; an active apply uses one captured bot credential. These protections supplement, rather than replace, disposable-server live acceptance.
+See [the 2026-10-30 follow-up development audit](docs/development-audit-2026-10-30-followup.md) for the current inspected revision, merged changes, branch review, documentation status, verification limits, and next milestones. The [original 2026-10-30 audit](docs/development-audit-2026-10-30.md) remains as a historical snapshot. Setup previews bind the selected bot and canonical role/channel permission context; an active apply uses one captured bot credential. These protections supplement, rather than replace, disposable-server live acceptance.
