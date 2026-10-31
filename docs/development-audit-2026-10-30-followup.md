@@ -2,15 +2,15 @@
 
 ## Scope and source
 
-- Repository: \`Chaotic-Minds-Collective/Chaotic-Command\`.
-- Branch inspected: \`main\`.
-- Inspected main commit: \`499bf58e673e2166d32e027579585d90a03fb0e4\`.
+- Repository: `Chaotic-Minds-Collective/Chaotic-Command`.
+- Branch inspected: `main`.
+- Inspected main commit: `499bf58e673e2166d32e027579585d90a03fb0e4`.
 - Repository visibility: private.
-- Default branch: \`main\`.
+- Default branch: `main`.
 - The current recursive tree contains 236 entries and is not truncated.
 - The repository currently has no open issues in the inspected issue list.
 - Fifteen pull requests are merged. The most recent merged pull request is #15.
-- This is a follow-up to \`docs/development-audit-2026-10-30.md\`. The earlier report remains a historical snapshot at commit \`26797e86e5dce76c5977759a938540b75e3813de\`.
+- This is a follow-up to `docs/development-audit-2026-10-30.md`. The earlier report remains a historical snapshot at commit `26797e86e5dce76c5977759a938540b75e3813de`.
 
 ## Changes since the earlier audit
 
@@ -18,30 +18,30 @@ The earlier audit ended at PR #13. The current main branch also contains:
 
 | Pull request | Merge commit | Verified change |
 | --- | --- | --- |
-| #14 | \`7a99a6382c30778e8c65cee5f48835557d63cb4d\` | Bind setup previews to bot identity and permission context |
-| #15 | \`499bf58e673e2166d32e027579585d90a03fb0e4\` | Add SQLite persistence and encrypted credential recovery tests |
+| #14 | `7a99a6382c30778e8c65cee5f48835557d63cb4d` | Bind setup previews to bot identity and permission context |
+| #15 | `499bf58e673e2166d32e027579585d90a03fb0e4` | Add SQLite persistence and encrypted credential recovery tests |
 
 PR #14 adds preview binding to the selected bot identity and canonical role, channel, and permission-overwrite context. It also ensures one captured bot credential is used for an active snapshot or apply operation. This reduces the chance of applying a preview after changing the selected bot or relevant server permissions.
 
-PR #15 adds \`apps/command/test/persistence.test.mjs\` and \`docs/sqlite-persistence-testing.md\`. Its verification record reports 36 of 36 tests passing on Node.js v24.22.1. The tests cover application restart, clean-shutdown database-copy recovery, mismatched encryption keys, corrupted encrypted records, and reopening the database in a separate Node.js process.
+PR #15 adds `apps/command/test/persistence.test.mjs` and `docs/sqlite-persistence-testing.md`. Its verification record reports 36 of 36 tests passing on Node.js v24.22.1. The tests cover application restart, clean-shutdown database-copy recovery, mismatched encryption keys, corrupted encrypted records, and reopening the database in a separate Node.js process.
 
 These tests use offline fixtures and mocked Discord responses. They do not establish live Discord acceptance, hot-backup recovery, abrupt-crash recovery, browser visual behavior, or multi-process safety.
 
 ## Current architecture
 
-The active application is a dependency-free Node.js runtime in \`apps/command\`.
+The active application is a dependency-free Node.js runtime in `apps/command`.
 
 | Path | Responsibility |
 | --- | --- |
-| \`apps/command/server.mjs\` | HTTP server, Discord OAuth, sessions, API routes, SQLite access, credential encryption, and static-file allowlist |
-| \`apps/command/core.mjs\` | Templates, structure validation, read-only audit, setup planning, apply operations, and per-server locks |
-| \`apps/command/web/\` | Vanilla browser interface, HTML, CSS, and JavaScript |
-| \`apps/command/test/\` | Node.js tests using mocked Discord responses and offline fixtures |
-| \`docs/\` | Application runbooks, acceptance checklists, and engineering audit records |
+| `apps/command/server.mjs` | HTTP server, Discord OAuth, sessions, API routes, SQLite access, credential encryption, and static-file allowlist |
+| `apps/command/core.mjs` | Templates, structure validation, read-only audit, setup planning, apply operations, and per-server locks |
+| `apps/command/web/` | Vanilla browser interface, HTML, CSS, and JavaScript |
+| `apps/command/test/` | Node.js tests using mocked Discord responses and offline fixtures |
+| `docs/` | Application runbooks, acceptance checklists, and engineering audit records |
 
-The root \`package.json\` declares Node.js 24 or newer and provides \`start\`, \`dev\`, \`test\`, and \`check\` scripts. The active runtime does not require a frontend build step or package installation. It uses built-in Node.js HTTP, crypto, and SQLite modules.
+The root `package.json` declares Node.js 24 or newer and provides `start`, `dev`, `test`, and `check` scripts. The active runtime does not require a frontend build step or package installation. It uses built-in Node.js HTTP, crypto, and SQLite modules.
 
-The original React/TypeScript Bit workspace remains under \`design/\` and \`guildpilot/\`, with \`.bitmap\`, \`workspace.jsonc\`, and \`pnpm-lock.yaml\`. The original GuildPilot prototype uses mock data and is not wired into the active runtime. Preserve this workspace and do not regenerate or delete it as part of standalone runtime work.
+The original React/TypeScript Bit workspace remains under `design/` and `guildpilot/`, with `.bitmap`, `workspace.jsonc`, and `pnpm-lock.yaml`. The original GuildPilot prototype uses mock data and is not wired into the active runtime. Preserve this workspace and do not regenerate or delete it as part of standalone runtime work.
 
 ## Current implemented capabilities
 
@@ -74,9 +74,9 @@ The existing-server audit is read-only. The setup flow adds missing objects to a
 
 ## Branch audit
 
-At the time of inspection, the application repository had two existing branches: \`main\` and \`website/rebuild-foundation\`.
+At the time of inspection, the application repository had two existing branches: `main` and `website/rebuild-foundation`.
 
-The \`website/rebuild-foundation\` branch is five commits ahead of and five commits behind \`main\`. It contains a public landing page, responsive styling, route changes that separate the homepage from the command workspace, and tests for those routes. It is not merged and has no corresponding open pull request in the inspected PR list.
+The `website/rebuild-foundation` branch is five commits ahead of and five commits behind `main`. It contains a public landing page, responsive styling, route changes that separate the homepage from the command workspace, and tests for those routes. It is not merged and has no corresponding open pull request in the inspected PR list.
 
 Do not merge that branch blindly. Its server and test files were based on the earlier main commit at PR #13. Reconcile its route changes against the newer PR #14 preview safeguards and PR #15 persistence work.
 
@@ -84,7 +84,7 @@ A separate main-based review branch is being used to port the public homepage ch
 
 ## Documentation status
 
-The Mintlify deployment \`chaoticcommand\` is connected to the public GitHub repository \`psyryn82/mintlify-docs\`, using \`main\` as its deploy branch.
+The Mintlify deployment `chaoticcommand` is connected to the public GitHub repository `psyryn82/mintlify-docs`, using `main` as its deploy branch.
 
 A draft documentation pull request has been opened in that repository:
 
@@ -98,14 +98,14 @@ The documentation PR is not merged and has not been published to the live site.
 
 ## Composio assessment
 
-The active application source uses direct Discord REST requests. No Composio SDK, adapter, or runtime orchestration layer is implemented in \`apps/command\`.
+The active application source uses direct Discord REST requests. No Composio SDK, adapter, or runtime orchestration layer is implemented in `apps/command`.
 
 A future integration must preserve account ownership, per-server authorization, least-privilege tool allowlists, read-only audit and preview boundaries, explicit confirmation before writes, and offline adapter tests. A connected operator Composio account must not be treated as the user's own connection.
 
 ## Verification record and remaining gaps
 
 - PR #15 records 36/36 offline tests passing on Node.js v24.22.1.
-- The GitHub Actions workflow runs Node.js 24 syntax checks and the test suite on pushes and pull requests targeting \`main\`.
+- The GitHub Actions workflow runs Node.js 24 syntax checks and the test suite on pushes and pull requests targeting `main`.
 - The combined-status and workflow-run lookups for the current merge commit returned no status records during this audit. Do not infer a current hosted CI pass from older runs.
 - Live OAuth, personal bot connection, bot installation, role hierarchy, audit, preview, and apply still require manual acceptance in a disposable Discord server.
 - Browser visual and accessibility testing remain outstanding.
