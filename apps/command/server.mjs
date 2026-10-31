@@ -114,7 +114,9 @@ export function createApp(config = {}) {
     try { return JSON.parse(text || '{}'); } catch { throw new HttpError(400, 'Invalid JSON.'); }
   }
   const assets = new Map([
-    ['/', ['index.html', 'text/html; charset=utf-8']],
+    ['/', ['home.html', 'text/html; charset=utf-8']],
+    ['/home.css', ['home.css', 'text/css; charset=utf-8']],
+    ['/command', ['index.html', 'text/html; charset=utf-8']],
     ['/app.js', ['app.js', 'text/javascript; charset=utf-8']],
     ['/style.css', ['style.css', 'text/css; charset=utf-8']]
   ]);
@@ -168,7 +170,7 @@ export function createApp(config = {}) {
         deleteSession(sid); sid = random();
         session = { csrf: random(), token: token.access_token, tokenExpires: Date.now() + token.expires_in * 1000, user: { id: user.id, username: user.global_name || user.username }, expires: Date.now() + 8 * HOUR };
         persist(); res.setHeader('Set-Cookie', cookie(sid));
-        res.writeHead(302, { Location: '/' }); res.end(); return;
+        res.writeHead(302, { Location: '/command' }); res.end(); return;
       }
       if (!session?.user || session.tokenExpires <= Date.now()) throw new HttpError(401, 'Sign in with Discord.');
       if (!['GET', 'POST'].includes(req.method)) throw new HttpError(405, 'Method not allowed.');
