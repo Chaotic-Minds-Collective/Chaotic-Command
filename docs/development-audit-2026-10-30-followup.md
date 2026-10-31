@@ -106,7 +106,8 @@ A future integration must preserve account ownership, per-server authorization, 
 
 - PR #15 records 36/36 offline tests passing on Node.js v24.22.1.
 - The GitHub Actions workflow runs Node.js 24 syntax checks and the test suite on pushes and pull requests targeting `main`.
-- The combined-status and workflow-run lookups for the current merge commit returned no status records during this audit. Do not infer a current hosted CI pass from older runs.
+- GitHub Actions run #154 for current main commit `499bf58e673e2166d32e027579585d90a03fb0e4` completed successfully. Both the syntax-check and test steps passed.
+- The public homepage PR #17 runs #167 (push) and #168 (pull_request) also completed successfully, including syntax checks and the full test suite.
 - Live OAuth, personal bot connection, bot installation, role hierarchy, audit, preview, and apply still require manual acceptance in a disposable Discord server.
 - Browser visual and accessibility testing remain outstanding.
 - Production backup automation, hot-backup consistency, abrupt-crash recovery, and multi-process coordination remain unverified.
