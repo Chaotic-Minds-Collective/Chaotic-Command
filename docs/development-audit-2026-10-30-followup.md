@@ -80,7 +80,7 @@ The `website/rebuild-foundation` branch is five commits ahead of and five commit
 
 Do not merge that branch blindly. Its server and test files were based on the earlier main commit at PR #13. Reconcile its route changes against the newer PR #14 preview safeguards and PR #15 persistence work.
 
-A separate main-based review branch is being used to port the public homepage changes without replacing the newer runtime. The homepage copy is being corrected to avoid claiming that new-guild creation, full revamping, or automations are already available.
+A separate main-based review branch, feature/public-homepage-mainline, now carries the ported homepage and route changes. Draft [PR #17](https://github.com/Chaotic-Minds-Collective/Chaotic-Command/pull/17) preserves the current security and persistence code, keeps the command workspace at /command, and corrects the product copy. GitHub Actions runs #167 (push) and #168 (pull_request) both completed successfully on commit 99abd252c04b2a10ca3456fa3abe1b95246738e2. The PR remains a draft and is not merged or deployed.
 
 ## Documentation status
 
@@ -94,7 +94,7 @@ A draft documentation pull request has been opened in that repository:
 - Adds product-specific documentation repository instructions.
 - Verifies that all 24 navigation page paths resolve to an existing MDX file.
 
-The documentation PR is not merged and has not been published to the live site.
+The documentation changes are in draft [PR #6](https://github.com/psyryn82/mintlify-docs/pull/6). This application audit is tracked in draft [PR #16](https://github.com/Chaotic-Minds-Collective/Chaotic-Command/pull/16). Neither PR is merged, and the documentation has not been published to the live site.
 
 ## Composio assessment
 
