@@ -13,7 +13,7 @@ node --env-file-if-exists=.env apps/command/server.mjs
 # Or: npm start
 ```
 
-Open http://localhost:3000. Without credentials, the UI explains configuration and safely disables login. To develop: `npm run dev`. Validate with `npm run check` and `npm test`, or run `node --test apps/command/test/*.test.mjs` directly. There is no frontend compilation step: the server serves the vanilla browser app directly.
+Open http://localhost:3000 for the public product homepage. The command workspace is available at http://localhost:3000/command. Without credentials, the workspace explains configuration and safely disables login. To develop: `npm run dev`. Validate with `npm run check` and `npm test`, or run `node --test apps/command/test/*.test.mjs` directly. There is no frontend compilation step: the server serves the vanilla browser app directly.
 
 ## Discord configuration
 

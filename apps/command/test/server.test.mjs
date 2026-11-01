@@ -24,6 +24,7 @@ async function signIn(url, code = 'test-code') {
     redirect: 'manual', headers: { Cookie: initialCookie }
   });
   assert.equal(callback.status, 302);
+  assert.equal(new URL(callback.headers.get('location'), url).pathname, '/command');
   const cookie = callback.headers.get('set-cookie').split(';')[0];
   const session = await fetch(`${url}/api/session`, { headers: { Cookie: cookie } });
   const data = await session.json();
@@ -35,8 +36,16 @@ test('unconfigured app serves UI and health but rejects login and protected requ
   let response = await fetch(`${url}/api/health`);
   assert.deepEqual(await response.json(), { ok: true, configured: false });
   response = await fetch(url); assert.equal(response.status, 200);
-  assert.match(await response.text(), /Chaotic Command/);
+  const homepage = await response.text();
+  assert.match(homepage, /Bring order/);
+  assert.match(homepage, /href="\/command"/);
   assert.match(response.headers.get('content-security-policy'), /frame-ancestors 'none'/);
+  response = await fetch(`${url}/home.css`); assert.equal(response.status, 200);
+  assert.match(response.headers.get('content-type'), /text\/css/);
+  response = await fetch(`${url}/command`); assert.equal(response.status, 200);
+  assert.match(await response.text(), /id="workspace"/);
+  response = await fetch(`${url}/app.js`); assert.equal(response.status, 200);
+  assert.match(response.headers.get('content-type'), /javascript/);
   response = await fetch(`${url}/auth/discord`); assert.equal(response.status, 503);
   response = await fetch(`${url}/api/guilds`); assert.equal(response.status, 401);
   response = await fetch(`${url}/api/guilds/123456789012345678/apply`, { method: 'POST', body: '{}' }); assert.equal(response.status, 401);
