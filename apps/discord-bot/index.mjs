@@ -1,27 +1,54 @@
 import process from 'node:process';
+import http from 'node:http';
 
 const DISCORD_API = 'https://discord.com/api/v10';
 const DISCORD_GATEWAY = 'wss://gateway.discord.gg/?v=10&encoding=json';
+
+// ---------------------------------------------------------------- env
 const token = process.env.DISCORD_BOT_TOKEN;
 const applicationId = process.env.DISCORD_APPLICATION_ID;
 const guildId = process.env.DISCORD_GUILD_ID;
+const logFormat = process.env.LOG_FORMAT === 'json' ? 'json' : 'text';
+const healthPort = Number(process.env.BOT_HEALTH_PORT || 0);
 
-if (!token) {
-  console.error('[discord-bot] DISCORD_BOT_TOKEN is required');
-  process.exit(1);
+function requireEnv(name, value) {
+  if (!value) {
+    log('error', `missing required environment variable ${name}`, { var: name });
+    process.exit(1);
+  }
+  return value;
 }
 
+requireEnv('DISCORD_BOT_TOKEN', token);
+
+// ---------------------------------------------------------------- logging
+function log(level, message, extra = {}) {
+  const entry = { ts: new Date().toISOString(), level, app: 'discord-bot', message, ...extra };
+  const line = logFormat === 'json' ? JSON.stringify(entry) : `[discord-bot] ${level}: ${message}${Object.keys(extra).length ? ' ' + JSON.stringify(extra) : ''}`;
+  if (level === 'error') console.error(line);
+  else console.log(line);
+}
+
+// ---------------------------------------------------------------- status
+const status = {
+  state: 'starting',
+  connectedSince: null,
+  lastReadyAt: null,
+  lastSequence: null,
+  reconnectAttempts: 0,
+  lastError: null,
+};
+
+// ---------------------------------------------------------------- gateway
 const intents = 1; // GUILDS: enough for the initial Gateway worker and slash-command lifecycle.
 let socket;
 let heartbeatTimer;
 let reconnectTimer;
 let sequence = null;
+let sessionId = null;
+let resumeGatewayUrl = null;
 let shuttingDown = false;
 let reconnectAttempt = 0;
-
-function log(message, details = '') {
-  console.log(`[discord-bot] ${message}${details ? ` ${details}` : ''}`);
-}
 
 function clearTimers() {
   if (heartbeatTimer) clearInterval(heartbeatTimer);
@@ -61,7 +88,7 @@ async function discordRequest(path, options = {}) {
 
 async function validateBot() {
   const bot = await discordRequest('/users/@me');
-  log(`authenticated as ${bot.username} (${bot.id})`);
+  log('info', `authenticated as ${bot.username}`, { botId: bot.id });
 
   if (applicationId && bot.id !== applicationId) {
     throw new Error(`DISCORD_APPLICATION_ID ${applicationId} does not match bot user ${bot.id}`);
@@ -70,7 +97,7 @@ async function validateBot() {
 
 async function registerHealthCommand() {
   if (!applicationId || !guildId) {
-    log('slash-command registration skipped; set DISCORD_APPLICATION_ID and DISCORD_GUILD_ID to enable it');
+    log('info', 'slash-command registration skipped; set DISCORD_APPLICATION_ID and DISCORD_GUILD_ID to enable it');
     return;
   }
 
@@ -83,50 +110,82 @@ async function registerHealthCommand() {
       },
     ]),
   });
-  log(`registered development commands for guild ${guildId}`);
+  log('info', 'registered development commands', { guildId });
 }
 
-function scheduleReconnect(reason) {
+function scheduleReconnect(reason, immediate = false) {
   if (shuttingDown || reconnectTimer) return;
   clearTimers();
   reconnectAttempt += 1;
-  const delay = Math.min(30_000, 1_000 * 2 ** Math.min(reconnectAttempt - 1, 5));
-  log(`reconnecting in ${delay}ms`, reason);
+  status.reconnectAttempts = reconnectAttempt;
+  const delay = immediate ? 0 : Math.min(30_000, 1_000 * 2 ** Math.min(reconnectAttempt - 1, 5));
+  log('info', `reconnecting in ${delay}ms`, { reason });
   reconnectTimer = setTimeout(connect, delay);
+}
+
+function identify() {
+  send({
+    op: 2,
+    d: {
+      token,
+      intents,
+      properties: {
+        os: process.platform,
+        browser: 'chaotic-command',
+        device: 'chaotic-command',
+      },
+    },
+  });
+}
+
+function resume() {
+  send({
+    op: 6,
+    d: {
+      token,
+      session_id: sessionId,
+      seq: sequence,
+    },
+  });
 }
 
 function handleDispatch(event, data) {
   if (event === 'READY') {
     reconnectAttempt = 0;
-    log(`Gateway READY as ${data.user?.username ?? 'bot'} in ${data.guilds?.length ?? 0} guild(s)`);
+    status.reconnectAttempts = 0;
+    sessionId = data.session_id ?? sessionId;
+    resumeGatewayUrl = data.resume_gateway_url ?? resumeGatewayUrl;
+    status.state = 'ready';
+    status.connectedSince = new Date().toISOString();
+    status.lastReadyAt = status.connectedSince;
+    log('info', 'Gateway READY', { guilds: data.guilds?.length ?? 0, sessionId });
+    return;
+  }
+
+  if (event === 'RESUMED') {
+    status.state = 'ready';
+    log('info', 'Gateway session RESUMED');
     return;
   }
 
   if (event === 'INTERACTION_CREATE') {
-    log(`received interaction ${data.id} (${data.data?.name ?? 'unknown'})`);
+    log('info', 'received interaction', { id: data.id, name: data.data?.name ?? 'unknown' });
     // Interaction handlers, tickets, moderation cases, and approval workflows will be added next.
   }
 }
 
 function handleMessage(raw) {
   const message = JSON.parse(raw);
-  if (message.s !== null && message.s !== undefined) sequence = message.s;
+  if (message.s !== null && message.s !== undefined) {
+    sequence = message.s;
+    status.lastSequence = message.s;
+  }
 
   if (message.op === 10) {
     const interval = Number(message.d.heartbeat_interval);
     heartbeatTimer = setInterval(heartbeat, interval);
-    send({
-      op: 2,
-      d: {
-        token,
-        intents,
-        properties: {
-          os: process.platform,
-          browser: 'chaotic-command',
-          device: 'chaotic-command',
-        },
-      },
-    });
+    if (sessionId && sequence !== null) resume();
+    else identify();
     return;
   }
 
@@ -140,7 +199,18 @@ function handleMessage(raw) {
     return;
   }
   if (message.op === 9) {
-    throw new Error('Discord invalidated the session');
+    // d === false means the session is not resumable; drop it and re-identify.
+    if (message.d === false) {
+      log('warn', 'Discord invalidated the session; re-identifying');
+      sessionId = null;
+      sequence = null;
+      status.state = 'reconnecting';
+      socket?.close(4000, 'invalid session');
+    } else {
+      log('info', 'Discord requested session resume');
+      resume();
+    }
+    return;
   }
   if (message.op === 0) handleDispatch(message.t, message.d);
 }
@@ -148,33 +218,59 @@ function handleMessage(raw) {
 function connect() {
   if (shuttingDown) return;
   clearTimers();
-  socket = new WebSocket(DISCORD_GATEWAY);
+  const url = resumeGatewayUrl ? `${resumeGatewayUrl}/?v=10&encoding=json` : DISCORD_GATEWAY;
+  socket = new WebSocket(url);
 
-  socket.addEventListener('open', () => log('Gateway connection opened'));
+  socket.addEventListener('open', () => log('info', 'Gateway connection opened'));
   socket.addEventListener('message', (event) => {
     try {
       handleMessage(String(event.data));
     } catch (error) {
-      console.error('[discord-bot] Gateway message error', error);
+      status.lastError = String(error);
+      log('error', 'Gateway message error', { error: String(error) });
       socket?.close(1011, 'worker error');
     }
   });
   socket.addEventListener('error', (event) => {
-    console.error('[discord-bot] Gateway error', event.error ?? event);
+    status.lastError = String(event.error ?? event);
+    log('error', 'Gateway error', { error: String(event.error ?? event) });
   });
   socket.addEventListener('close', (event) => {
     clearTimers();
-    log(`Gateway closed (${event.code})`, event.reason || 'no reason');
+    if (status.state === 'ready') status.state = 'disconnected';
+    log('info', 'Gateway closed', { code: event.code, reason: event.reason || 'no reason' });
     scheduleReconnect(`close code ${event.code}`);
   });
 }
 
+// ---------------------------------------------------------------- health endpoint
+function startHealthEndpoint() {
+  if (!healthPort) return;
+  const server = http.createServer((req, res) => {
+    if (req.url !== '/health') {
+      res.writeHead(404).end();
+      return;
+    }
+    const healthy = status.state === 'ready';
+    res.writeHead(healthy ? 200 : 503, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(status));
+  });
+  server.listen(healthPort, '0.0.0.0', () => log('info', 'health endpoint listening', { port: healthPort }));
+}
+
+// ---------------------------------------------------------------- lifecycle
 async function shutdown(signal) {
   if (shuttingDown) return;
   shuttingDown = true;
   clearTimers();
-  log(`shutting down on ${signal}`);
-  socket?.close(1000, 'worker shutdown');
+  log('info', 'shutting down', { signal });
+  const done = () => process.exit(0);
+  if (socket && socket.readyState === WebSocket.OPEN) {
+    socket.close(1000, 'worker shutdown');
+    setTimeout(done, 3_000).unref();
+  } else {
+    done();
+  }
 }
 
 process.on('SIGTERM', () => void shutdown('SIGTERM'));
@@ -183,8 +279,9 @@ process.on('SIGINT', () => void shutdown('SIGINT'));
 try {
   await validateBot();
   await registerHealthCommand();
+  startHealthEndpoint();
   connect();
 } catch (error) {
-  console.error('[discord-bot] startup failed', error);
+  log('error', 'startup failed', { error: String(error) });
   process.exit(1);
 }
