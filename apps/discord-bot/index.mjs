@@ -11,6 +11,7 @@ const guildId = process.env.DISCORD_GUILD_ID;
 const logFormat = process.env.LOG_FORMAT === 'json' ? 'json' : 'text';
 const healthPort = Number(process.env.BOT_HEALTH_PORT || 0);
 
+/** Return a required environment value, or log an error and exit if it is missing. */
 function requireEnv(name, value) {
   if (!value) {
     log('error', `missing required environment variable ${name}`, { var: name });
@@ -22,6 +23,7 @@ function requireEnv(name, value) {
 requireEnv('DISCORD_BOT_TOKEN', token);
 
 // ---------------------------------------------------------------- logging
+/** Write a structured log entry as JSON or text, using stderr for errors. */
 function log(level, message, extra = {}) {
   const entry = { ts: new Date().toISOString(), level, app: 'discord-bot', message, ...extra };
   const line = logFormat === 'json' ? JSON.stringify(entry) : `[discord-bot] ${level}: ${message}${Object.keys(extra).length ? ' ' + JSON.stringify(extra) : ''}`;
@@ -86,6 +88,7 @@ async function discordRequest(path, options = {}) {
   return response.json();
 }
 
+/** Authenticate the bot and reject an application ID that does not match its user ID. */
 async function validateBot() {
   const bot = await discordRequest('/users/@me');
   log('info', `authenticated as ${bot.username}`, { botId: bot.id });
@@ -95,6 +98,7 @@ async function validateBot() {
   }
 }
 
+/** Register the guild health command when both application and guild IDs are set. */
 async function registerHealthCommand() {
   if (!applicationId || !guildId) {
     log('info', 'slash-command registration skipped; set DISCORD_APPLICATION_ID and DISCORD_GUILD_ID to enable it');
@@ -113,6 +117,7 @@ async function registerHealthCommand() {
   log('info', 'registered development commands', { guildId });
 }
 
+/** Schedule one reconnect, using exponential backoff unless immediate is requested. */
 function scheduleReconnect(reason, immediate = false) {
   if (shuttingDown || reconnectTimer) return;
   clearTimers();
@@ -149,6 +154,7 @@ function resume() {
   });
 }
 
+/** Update readiness and session state for Gateway dispatches and log interactions. */
 function handleDispatch(event, data) {
   if (event === 'READY') {
     reconnectAttempt = 0;
@@ -174,6 +180,7 @@ function handleDispatch(event, data) {
   }
 }
 
+/** Process a Gateway payload, tracking its sequence and responding to its opcode. */
 function handleMessage(raw) {
   const message = JSON.parse(raw);
   if (message.s !== null && message.s !== undefined) {
@@ -216,6 +223,7 @@ function handleMessage(raw) {
   if (message.op === 0) handleDispatch(message.t, message.d);
 }
 
+/** Open a Gateway socket and attach message, error, and reconnect handlers. */
 function connect() {
   if (shuttingDown) return;
   clearTimers();
@@ -250,6 +258,7 @@ function connect() {
 }
 
 // ---------------------------------------------------------------- health endpoint
+/** Start the optional HTTP endpoint that reports readiness and current status. */
 function startHealthEndpoint() {
   if (!healthPort) return;
   const server = http.createServer((req, res) => {
@@ -265,6 +274,7 @@ function startHealthEndpoint() {
 }
 
 // ---------------------------------------------------------------- lifecycle
+/** Stop timers and close an open Gateway socket before exiting on a signal. */
 async function shutdown(signal) {
   if (shuttingDown) return;
   shuttingDown = true;
