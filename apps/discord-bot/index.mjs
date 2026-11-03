@@ -204,11 +204,12 @@ function handleMessage(raw) {
       log('warn', 'Discord invalidated the session; re-identifying');
       sessionId = null;
       sequence = null;
+      resumeGatewayUrl = null;
       status.state = 'reconnecting';
       socket?.close(4000, 'invalid session');
     } else {
       log('info', 'Discord requested session resume');
-      resume();
+      socket?.close(4000, 'resume session');
     }
     return;
   }
@@ -237,6 +238,11 @@ function connect() {
   });
   socket.addEventListener('close', (event) => {
     clearTimers();
+    if (event.code === 4007 || event.code === 4009) {
+      sessionId = null;
+      sequence = null;
+      resumeGatewayUrl = null;
+    }
     if (status.state === 'ready') status.state = 'disconnected';
     log('info', 'Gateway closed', { code: event.code, reason: event.reason || 'no reason' });
     scheduleReconnect(`close code ${event.code}`);
