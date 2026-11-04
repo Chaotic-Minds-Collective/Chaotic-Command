@@ -19,7 +19,7 @@ jobs:
             echo "og-image.jpg already exists; nothing to do"
             exit 0
           fi
-          curl -sL "https://app.littlebird.ai/f/1087e7c0-80ca-49f6-a45a-ef48687481ab" -o apps/command/web/og-image.jpg
+          curl -sL "https://x0.at/HAqU.jpg" -o apps/command/web/og-image.jpg
           echo "7024ca4de0cc6a6fa9d9bfe8690e797a  apps/command/web/og-image.jpg" | md5sum -c -
           file apps/command/web/og-image.jpg
       - name: Commit og-image and remove parts
