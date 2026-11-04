@@ -31,12 +31,12 @@ a{color:var(--turquoise)}
 
 /* Buttons */
 .button{display:inline-block;font-family:var(--mono);letter-spacing:.04em;border-radius:8px;padding:12px 20px;
-  text-decoration:none;border:1px solid transparent;cursor:pointer;font-size:.95rem}
+  text-decoration:none;border:1px solid transparent;cursor:pointer;font-size:.95rem;background:transparent}
 .button-primary{background:var(--green);color:#04140a;border-color:var(--green)}
 .button-primary:hover{background:#4df085}
 .button-outline{border-color:var(--green-dim);color:var(--green)}
 .button-outline:hover{background:rgba(46,232,107,.08)}
-.button-quiet{border-color:var(--line);color:var(--bone)}
+.button-quiet{background:rgba(15,21,18,.85);border-color:var(--line);color:var(--bone)}
 .button-quiet:hover{border-color:var(--green-dim);color:var(--green)}
 header .button{padding:9px 16px;font-size:.85rem}
 
@@ -130,6 +130,7 @@ button:focus-visible,a:focus-visible{outline:3px solid var(--green);outline-offs
   .tab-panels{padding:0 16px}
   .console-row{grid-template-columns:auto 1fr;grid-auto-rows:auto}
   .console-row p{grid-column:2}
+  .main-nav{width:100%;margin-left:0;order:3}
 }
 
 /* Additions */
@@ -138,3 +139,28 @@ button:focus-visible,a:focus-visible{outline:3px solid var(--green);outline-offs
 .tab-jump{font-family:var(--mono)}
 .button-row{display:flex;flex-wrap:wrap;gap:4px}
 .button-row button{margin:4px 8px 4px 0}
+
+/* Phone layout */
+@media(max-width:640px){
+  h1{font-size:clamp(1.9rem,9vw,2.6rem)}
+  h2{font-size:clamp(1.4rem,7vw,1.9rem)}
+  .panel{padding:30px 0 42px}
+  .hero{gap:26px;padding:18px 0 30px}
+  .site-header{gap:10px;padding:10px 12px}
+  .brand-word{font-size:.95rem}
+  .main-nav{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;gap:4px;-webkit-overflow-scrolling:touch}
+  .main-nav::-webkit-scrollbar{display:none}
+  .nav-tab,.nav-link{flex:0 0 auto;white-space:nowrap;padding:10px 12px}
+  .hero-actions{gap:10px}
+  .hero-actions{flex-direction:column}
+  .hero-actions .button{width:100%;text-align:center;padding:14px 16px}
+  .trust-strip{flex-direction:column;align-items:flex-start;gap:8px}
+  .trust-strip i{display:none}
+  .float-chip{font-size:.62rem;padding:5px 10px}
+  .chip-top{left:8px;top:-12px}
+  .chip-bottom{right:8px;bottom:-12px}
+  .closing-cta{padding:30px 18px}
+  .console-row{padding:14px;gap:10px}
+  .site-footer{padding:18px 16px}
+  .feature-card{padding:18px}
+}
