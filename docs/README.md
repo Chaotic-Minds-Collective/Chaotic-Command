@@ -13,6 +13,5 @@
 
 Additional documentation lives next to the code it describes:
 
-- [apps/command/db/README.md](../apps/command/db/README.md): dual-driver persistence (SQLite development, PostgreSQL/Supabase production), migrations, backup and restore, secrets handling.
 - [AGENTS.md](../AGENTS.md): repo conventions and workflow rules.
-- [README.md](../README.md): quick start, Discord configuration, deployment notes.
+- [README.md](../README.md): quick start, Discord configuration, SQLite storage and backup, deployment notes.
