@@ -152,7 +152,8 @@ button:focus-visible,a:focus-visible{outline:3px solid var(--green);outline-offs
   .main-nav::-webkit-scrollbar{display:none}
   .nav-tab,.nav-link{flex:0 0 auto;white-space:nowrap;padding:10px 12px}
   .hero-actions{gap:10px}
-  .hero-actions .button{flex:1 1 auto;text-align:center;padding:14px 16px}
+  .hero-actions{flex-direction:column}
+  .hero-actions .button{width:100%;text-align:center;padding:14px 16px}
   .trust-strip{flex-direction:column;align-items:flex-start;gap:8px}
   .trust-strip i{display:none}
   .float-chip{font-size:.62rem;padding:5px 10px}
