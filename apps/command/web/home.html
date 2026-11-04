@@ -3,82 +3,95 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#090d16">
+  <meta name="theme-color" content="#0a0f0c">
   <meta name="description" content="Inspect the Discord servers you manage, design role and channel structures, and review proposed additions before applying them.">
-  <title>Chaotic Command — Take control of your Discord</title>
+  <meta property="og:title" content="Chaotic Command - All Systems Operational">
+  <meta property="og:description" content="Inspect a Discord server you manage, design roles, categories, and channels, and review every proposed change before applying it.">
+  <meta property="og:image" content="https://chaotic-command.onrender.com/og-image.jpg">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary_large_image">
+  <title>Chaotic Command - Take control of your Discord</title>
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/home.css">
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
   <header class="site-header">
     <a class="brand" href="/" aria-label="Chaotic Command home">
-      <span class="brand-mark" aria-hidden="true">CC</span>
-      <span>CHAOTIC<span class="brand-accent"> COMMAND</span></span>
+      <img class="brand-icon" src="/brand-icon-128.png" alt="" width="32" height="32">
+      <span class="brand-word">CHAOTIC<span class="brand-accent"> COMMAND</span></span>
     </a>
     <nav class="main-nav" aria-label="Main navigation">
-      <a href="#capabilities">Capabilities</a>
-      <a href="#workflow">How it works</a>
-      <a href="https://chaoticcommand.mintlify.site/index">Documentation</a>
-      <a href="/command">Command center</a>
+      <button class="nav-tab" id="tab-overview" aria-controls="panel-overview" aria-selected="true" type="button">Overview</button>
+      <button class="nav-tab" id="tab-capabilities" aria-controls="panel-capabilities" aria-selected="false" type="button">Capabilities</button>
+      <button class="nav-tab" id="tab-workflow" aria-controls="panel-workflow" aria-selected="false" type="button">How it works</button>
+      <button class="nav-tab" id="tab-status" aria-controls="panel-status" aria-selected="false" type="button">System status</button>
+      <a class="nav-link" href="https://chaoticcommand.mintlify.site/index">Documentation</a>
     </nav>
-    <a class="button button-outline header-action" href="/command">Open command center <span aria-hidden="true">↗</span></a>
+    <a class="button button-outline header-action" href="/command">Open command center <span aria-hidden="true">&#8599;</span></a>
   </header>
 
   <main id="main">
-    <section class="hero">
-      <div class="hero-copy">
-        <p class="eyebrow"><span class="status-dot"></span> YOUR SERVER. YOUR RULES. YOUR COMMAND.</p>
-        <h1>Bring order<br>to the <span class="gradient-text">chaos.</span></h1>
-        <p class="hero-description">Chaotic Command helps you inspect a Discord server you manage, design roles, categories, and channels, and review proposed additions before you apply them. You stay in control.</p>
-        <div class="hero-actions">
-          <a class="button button-primary" href="/command">Enter command center <span aria-hidden="true">→</span></a>
-          <a class="button button-quiet" href="#capabilities">Explore capabilities</a>
-        </div>
-        <div class="hero-note"><span class="shield" aria-hidden="true">◇</span> Preview changes before applying them. No surprise server edits.</div>
-      </div>
-      <div class="hero-visual" aria-label="Illustration of a Discord server command dashboard">
-        <div class="visual-glow"></div>
-        <div class="dashboard-window">
-          <div class="window-top"><div class="window-dots"><i></i><i></i><i></i></div><span>CHAOTIC COMMAND / OVERVIEW</span><span class="window-live">PRODUCT PREVIEW</span></div>
-          <div class="dashboard-body">
-            <aside class="mock-sidebar"><div class="mock-logo">CC</div><b class="side-active">Overview</b><span>Server setup</span><span>Server audit</span><span>Saved structures</span><span>Bot connections</span><div class="side-bottom">DISCORD CONNECT</div></aside>
-            <div class="mock-content">
-              <div class="mock-heading"><div><small>COMMAND CENTER</small><h2>Welcome back.</h2></div><span class="avatar">CC</span></div>
-              <div class="mock-stats"><div><small>SERVER AUDIT</small><strong>READ ONLY</strong><span>Inspect before planning</span></div><div><small>SAVED STRUCTURES</small><strong>20 MAX</strong><span>Per Discord account</span></div></div>
-              <div class="mock-panel"><div class="panel-heading"><b>Example server inventory</b><span>READ ONLY</span></div><div class="health-row"><span class="health-icon">⌘</span><div><b>Example Community</b><small>Roles · Categories · Channels</small></div><span class="health-tag">REVIEW</span></div><div class="health-row"><span class="health-icon">◇</span><div><b>Example Gaming Server</b><small>Review structure before setup</small></div><span class="health-tag health-good">PREVIEW</span></div></div>
-              <div class="mock-footer"><span>ILLUSTRATIVE DATA</span><span>NOT A LIVE ACCOUNT</span></div>
+    <div class="tab-panels">
+      <section class="panel" id="panel-overview" aria-labelledby="tab-overview">
+        <div class="hero">
+          <div class="hero-copy">
+            <p class="eyebrow"><span class="status-dot" aria-hidden="true"></span> ALL SYSTEMS OPERATIONAL</p>
+            <h1>Bring order<br>to the <span class="accent-text">chaos.</span></h1>
+            <p class="hero-description">Chaotic Command helps you inspect a Discord server you manage, design roles, categories, and channels, and review proposed additions before you apply them. You stay in control.</p>
+            <div class="hero-actions">
+              <a class="button button-primary" href="/command">Enter command center <span aria-hidden="true">&#8594;</span></a>
+              <button class="button button-quiet tab-jump" data-target="capabilities" type="button">Explore capabilities</button>
             </div>
+            <div class="hero-note"><span class="shield" aria-hidden="true">&#9671;</span> Preview changes before applying them. No surprise server edits.</div>
+          </div>
+          <div class="hero-visual">
+            <figure class="hero-frame">
+              <div class="frame-top"><span class="frame-label">CHAOTIC COMMAND / OVERVIEW</span><span class="frame-live">LIVE PREVIEW</span></div>
+              <img src="/og-image.jpg" alt="Chaotic Command banner: operator skull with headset above a radar sweep, tagged All Systems Operational" width="1200" height="630">
+            </figure>
+            <div class="float-chip chip-top"><span aria-hidden="true">&#8984;</span> SERVER BUILDER</div>
+            <div class="float-chip chip-bottom"><span aria-hidden="true">&#9671;</span> CONTROLLED CHANGES</div>
           </div>
         </div>
-        <div class="float-chip chip-top"><span>⌘</span> SERVER BUILDER</div>
-        <div class="float-chip chip-bottom"><span>◇</span> CONTROLLED CHANGES</div>
-        <p class="preview-caption">Illustrative interface preview, not live account data.</p>
-      </div>
-    </section>
+        <div class="trust-strip" aria-label="Product principles">
+          <span>BUILT FOR COMMUNITY OWNERS</span><i aria-hidden="true"></i><span>DESIGNED FOR CONTROL</span><i aria-hidden="true"></i><span>PREVIEW BEFORE APPLY</span><i aria-hidden="true"></i><span>YOUR DISCORD, YOUR DECISIONS</span>
+        </div>
+      </section>
 
-    <section class="trust-strip" aria-label="Product principles">
-      <span>BUILT FOR COMMUNITY OWNERS</span><i></i><span>DESIGNED FOR CONTROL</span><i></i><span>PREVIEW BEFORE APPLY</span><i></i><span>YOUR DISCORD, YOUR DECISIONS</span>
-    </section>
+      <section class="panel" id="panel-capabilities" aria-labelledby="tab-capabilities" hidden>
+        <div class="section-intro"><p class="eyebrow">ONE COMMAND CENTER. MORE CONTROL.</p><h2>Inspect first.<br><span class="accent-text">Plan with control.</span></h2><p>Use a server you manage. Review its current structure, prepare additions, and inspect every proposed change before applying it.</p></div>
+        <div class="capability-grid">
+          <article class="feature-card"><span class="feature-number">01 / STRUCTURE</span><div class="feature-icon"><img src="/brand-icon-128.png" alt="" width="40" height="40"></div><h3>Design a server structure</h3><p>Choose Community, Gaming, Support, or a custom layout for a Discord server you manage. Preview roles, categories, and channels to create or reuse.</p><a href="/command">Explore setup templates <span aria-hidden="true">&#8594;</span></a></article>
+          <article class="feature-card"><span class="feature-number">02 / AUDIT</span><div class="feature-icon feature-icon-alt" aria-hidden="true">&#8635;</div><h3>Inspect an existing server</h3><p>Run a read-only inventory of roles, categories, channels, and supported permission findings. The audit does not edit or reorganize existing objects.</p><a href="/command">Explore server audit <span aria-hidden="true">&#8594;</span></a></article>
+          <article class="feature-card"><span class="feature-number">03 / CONTROL</span><div class="feature-icon feature-icon-alt" aria-hidden="true">&#9671;</div><h3>Apply reviewed additions</h3><p>Review create and reuse steps, inspect role permissions, and confirm before creating missing objects. Existing role permissions remain unchanged.</p><a href="/command">See the workflow <span aria-hidden="true">&#8594;</span></a></article>
+        </div>
+      </section>
 
-    <section class="section capabilities" id="capabilities">
-      <div class="section-intro"><p class="eyebrow">ONE COMMAND CENTER. MORE CONTROL.</p><h2>Inspect first.<br><span class="gradient-text">Plan with control.</span></h2><p>Use a server you manage. Review its current structure, prepare additions, and inspect every proposed change before applying it.</p></div>
-      <div class="capability-grid">
-        <article class="feature-card"><span class="feature-number">01 / STRUCTURE</span><div class="feature-icon">⌘</div><h3>Design a server structure</h3><p>Choose Community, Gaming, Support, or a custom layout for a Discord server you manage. Preview roles, categories, and channels to create or reuse.</p><a href="/command">Explore setup templates <span>→</span></a></article>
-        <article class="feature-card"><span class="feature-number">02 / AUDIT</span><div class="feature-icon">⟳</div><h3>Inspect an existing server</h3><p>Run a read-only inventory of roles, categories, channels, and supported permission findings. The audit does not edit or reorganize existing objects.</p><a href="/command">Explore server audit <span>→</span></a></article>
-        <article class="feature-card"><span class="feature-number">03 / CONTROL</span><div class="feature-icon">◇</div><h3>Apply reviewed additions</h3><p>Review create and reuse steps, inspect role permissions, and confirm before creating missing objects. Existing role permissions remain unchanged.</p><a href="/command">See the workflow <span>→</span></a></article>
-      </div>
-    <p class="scope-note">Current MVP: Chaotic Command prepares additive structure changes inside an existing Discord server. It does not create Discord guilds, move or delete existing channels, change existing role permissions, or run automations.</p>
-    </section>
+      <section class="panel" id="panel-workflow" aria-labelledby="tab-workflow" hidden>
+        <div class="workflow-inner">
+          <div><p class="eyebrow">NO GUESSWORK. NO BLIND CHANGES.</p><h2>A better way to<br><span class="accent-text">run your server.</span></h2><p>Chaotic Command follows a simple workflow: understand the current server, prepare a plan, and apply reviewed additions only when you are ready.</p><a class="button button-primary" href="/command">Go to command center <span aria-hidden="true">&#8594;</span></a></div>
+          <ol class="workflow-list"><li><span>01</span><div><b>Connect Discord</b><p>Sign in and choose a server you have permission to manage.</p></div></li><li><span>02</span><div><b>Choose or inspect</b><p>Select a setup template or review an existing server's roles, categories, and channels.</p></div></li><li><span>03</span><div><b>Review the plan</b><p>See what will be created or reused before any server changes happen.</p></div></li><li><span>04</span><div><b>Apply when ready</b><p>You stay in control of when approved changes are sent to Discord.</p></div></li></ol>
+        </div>
+      </section>
 
-    <section class="workflow-section" id="workflow">
-      <div class="workflow-inner"><div><p class="eyebrow">NO GUESSWORK. NO BLIND CHANGES.</p><h2>A better way to<br><span class="gradient-text">run your server.</span></h2><p>Chaotic Command follows a simple workflow: understand the current server, prepare a plan, and apply reviewed additions only when you are ready.</p><a class="button button-primary" href="/command">Go to command center <span aria-hidden="true">→</span></a></div>
-        <ol class="workflow-list"><li><span>01</span><div><b>Connect Discord</b><p>Sign in and choose a server you have permission to manage.</p></div></li><li><span>02</span><div><b>Choose or inspect</b><p>Select a setup template or review an existing server's roles, categories, and channels.</p></div></li><li><span>03</span><div><b>Review the plan</b><p>See what will be created or reused before any server changes happen.</p></div></li><li><span>04</span><div><b>Apply when ready</b><p>You stay in control of when approved changes are sent to Discord.</p></div></li></ol>
-      </div>
-    </section>
-
-    <section class="closing-cta"><p class="eyebrow">READY WHEN YOU ARE</p><h2>Your community deserves<br>more than <span class="gradient-text">organized chaos.</span></h2><p>Start with a Discord server you manage and build its structure with intention.</p><a class="button button-primary" href="/command">Open Chaotic Command <span aria-hidden="true">→</span></a></section>
+      <section class="panel" id="panel-status" aria-labelledby="tab-status" hidden>
+        <div class="section-intro"><p class="eyebrow">SYSTEM STATUS</p><h2>Know the<br><span class="accent-text">operating envelope.</span></h2></div>
+        <div class="console">
+          <div class="console-row"><span class="led led-green" aria-hidden="true"></span><b>Operational</b><p>Server audit, structure design, preview, and reviewed apply flow.</p></div>
+          <div class="console-row"><span class="led led-green" aria-hidden="true"></span><b>Operational</b><p>Personal saved structures (20 max per Discord account) and per-server bot assignment.</p></div>
+          <div class="console-row"><span class="led led-amber" aria-hidden="true"></span><b>Not in scope</b><p>Chaotic Command does not create Discord guilds, move or delete existing channels, change existing role permissions, or run automations.</p></div>
+        </div>
+        <p class="scope-note">Current MVP: Chaotic Command prepares additive structure changes inside an existing Discord server.</p>
+        <div class="closing-cta"><p class="eyebrow">READY WHEN YOU ARE</p><h2>Your community deserves<br>more than <span class="accent-text">organized chaos.</span></h2><p>Start with a Discord server you manage and build its structure with intention.</p><a class="button button-primary" href="/command">Open Chaotic Command <span aria-hidden="true">&#8594;</span></a></div>
+      </section>
+    </div>
   </main>
 
-  <footer class="site-footer"><a class="brand" href="/"><span class="brand-mark">CC</span><span>CHAOTIC<span class="brand-accent"> COMMAND</span></span></a><span>Build better communities. Keep control.</span><a href="/command">Command center ↗</a><small>© <span id="year">2026</span> Chaotic Command</small></footer>
+  <footer class="site-footer"><a class="brand" href="/"><img class="brand-icon" src="/brand-icon-128.png" alt="" width="24" height="24"><span class="brand-word">CHAOTIC<span class="brand-accent"> COMMAND</span></span></a><span>Build better communities. Keep control.</span><a href="/command">Command center &#8599;</a><small>&copy; <span id="year">2026</span> Chaotic Command</small></footer>
+  <script src="/home.js" defer></script>
 </body>
 </html>
