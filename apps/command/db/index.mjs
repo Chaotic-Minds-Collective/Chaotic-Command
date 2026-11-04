@@ -24,11 +24,11 @@ const SQLITE_TABLES = {
 
 function translatePostgres(sql) {
   let out = sql.replace(/PRAGMA[^;]*;?/g, '');
-  out = out.replace(/INSERT OR REPLACE INTO (\w+)(\s*\([^)]*\))?\s*VALUES\s*\(([^)]*)\)/g, (match, table, columnList, values) => {
-    const spec = SQLITE_TABLES[table];
+  out = out.replace(/INSERT\s+OR\s+REPLACE\s+INTO\s+(\w+)(\s*\([^)]*\))?\s*VALUES\s*\(([^)]*)\)/gi, (match, table, columnList, values) => {
+    const spec = SQLITE_TABLES[table.toLowerCase()];
     if (!spec) throw new Error(`No Postgres conflict target defined for table ${table}`);
     const columns = columnList ? columnList.replace(/[()]/g, '').split(',').map(part => part.trim()) : spec.columns;
-    const setters = columns.filter(column => !spec.key.includes(column))
+    const setters = columns.filter(column => !spec.key.includes(column.toLowerCase()))
       .map(column => `${column} = EXCLUDED.${column}`)
       .join(', ');
     const conflict = spec.key.join(', ');
@@ -39,7 +39,7 @@ function translatePostgres(sql) {
 
 function toPgPlaceholders(sql) {
   let index = 0;
-  return sql.replace(/\?/g, () => `$${++index}`);
+  return sql.replace(/'(?:''|[^'])*'|"(?:""|[^"])*"|--[^\r\n]*|\/\*[\s\S]*?\*\/|\?/g, token => token === '?' ? `$${++index}` : token);
 }
 
 const SCHEMA = {

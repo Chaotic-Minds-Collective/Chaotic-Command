@@ -150,11 +150,15 @@ test('PostgreSQL adapter translates statements and propagates pool results and f
   await t.test('preserves question marks inside SQL string literals', async () => {
     await db.query("SELECT '?' AS literal, ? AS value", ['actual']);
     assert.deepEqual(pool.calls.at(-1), { sql: "SELECT '?' AS literal, $1 AS value", params: ['actual'] });
+    await db.query("SELECT 'it''s ?' AS literal, \"?\" FROM notes -- ?\nWHERE guild = ? /* ? */ AND value = ?", ['g', 'v']);
+    assert.equal(pool.calls.at(-1).sql, "SELECT 'it''s ?' AS literal, \"?\" FROM notes -- ?\nWHERE guild = $1 /* ? */ AND value = $2");
   });
   await t.test('translates case-insensitive SQLite upsert syntax', async () => {
     await db.prepare('insert or replace into notes values (?, ?)').run('guild', 'note');
     assert.match(pool.calls.at(-1).sql, /ON CONFLICT\s*\(guild\)\s+DO UPDATE SET/i);
     assert.deepEqual(pool.calls.at(-1).params, ['guild', 'note']);
+    await db.prepare('insert or replace into NOTES (GUILD, VALUE) values (?, ?)').run('guild', 'note');
+    assert.equal(pool.calls.at(-1).sql, 'INSERT INTO NOTES (GUILD, VALUE) VALUES ($1, $2) ON CONFLICT (guild) DO UPDATE SET VALUE = EXCLUDED.VALUE');
   });
   await db.close();
   assert.equal(pool.ended, true);
