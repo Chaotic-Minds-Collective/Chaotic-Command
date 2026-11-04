@@ -1,0 +1,33 @@
+name: Assemble og-image
+on:
+  push:
+    branches:
+      - feature/brand-launch
+permissions:
+  contents: write
+concurrency:
+  group: assemble-og-image
+  cancel-in-progress: false
+jobs:
+  assemble:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download and verify og-image
+        run: |
+          if [ -f apps/command/web/og-image.jpg ]; then
+            echo "og-image.jpg already exists; nothing to do"
+            exit 0
+          fi
+          curl -sL "https://app.littlebird.ai/f/1087e7c0-80ca-49f6-a45a-ef48687481ab" -o apps/command/web/og-image.jpg
+          echo "7024ca4de0cc6a6fa9d9bfe8690e797a  apps/command/web/og-image.jpg" | md5sum -c -
+          file apps/command/web/og-image.jpg
+      - name: Commit og-image and remove parts
+        run: |
+          git config user.name "littlebird-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm -f --ignore-unmatch apps/command/web/og-image.part0 apps/command/web/og-image.part1 apps/command/web/og-image.part2 apps/command/web/og-image.part3
+          git add apps/command/web/og-image.jpg
+          git diff --cached --quiet && echo "nothing to commit" && exit 0
+          git commit -m "Add og-image.jpg (downloaded and MD5-verified); remove base64 parts"
+          git push
