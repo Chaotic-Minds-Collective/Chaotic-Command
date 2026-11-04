@@ -22,6 +22,11 @@ const SQLITE_TABLES = {
   guild_bot_selections: { columns: ['owner_id', 'guild_id', 'bot_id'], key: ['owner_id', 'guild_id'] }
 };
 
+/**
+ * Rewrite supported SQLite syntax for PostgreSQL using case-sensitive text matching.
+ * INSERT OR REPLACE is supported only for sessions, notes, and guild_bot_selections;
+ * a matching statement for another table throws an error.
+ */
 function translatePostgres(sql) {
   let out = sql.replace(/PRAGMA[^;]*;?/g, '');
   out = out.replace(/INSERT OR REPLACE INTO (\w+)(\s*\([^)]*\))?\s*VALUES\s*\(([^)]*)\)/g, (match, table, columnList, values) => {
@@ -37,6 +42,7 @@ function translatePostgres(sql) {
   return out.replace(/\s+COLLATE NOCASE/g, '');
 }
 
+/** Replace every `?` with a numbered PostgreSQL placeholder, including those in literals. */
 function toPgPlaceholders(sql) {
   let index = 0;
   return sql.replace(/\?/g, () => `$${++index}`);
@@ -118,6 +124,12 @@ function sqliteMigrationExecutor(db) {
   return async sql => db.exec(sql);
 }
 
+/**
+ * Apply unrecorded .sql files in filename order and record each successful file
+ * with its application time in Unix epoch milliseconds. Files are identified by
+ * name; execution and recording are not wrapped in a transaction here. File and
+ * database errors propagate, so a failed migration may leave partial changes.
+ */
 async function runMigrations(adapter, executeSql) {
   await executeSql(`CREATE TABLE IF NOT EXISTS schema_migrations (name TEXT PRIMARY KEY, applied_at BIGINT NOT NULL)`);
   const applied = new Set((await adapter.query('SELECT name FROM schema_migrations')).map(row => row.name));
@@ -129,6 +141,26 @@ async function runMigrations(adapter, executeSql) {
   }
 }
 
+/**
+ * Open a database and apply the base schema and pending migrations before returning.
+ * env defaults to process.env. A truthy env.DATABASE_URL selects PostgreSQL;
+ * otherwise SQLite uses dbPath, or command.sqlite under env.DATA_DIR (default
+ * .data). Use ':memory:' for in-memory SQLite. dbPath is ignored for PostgreSQL.
+ * The PostgreSQL pool is configured with certificate verification disabled unless
+ * the connection string contains localhost, 127.0.0.1, or sslmode=disable.
+ *
+ * The returned adapter exposes kind, prepare(sql), exec(sql), query(sql, params),
+ * migrate(), and close(). SQLite adapters also expose filename. Prepared get/all/run
+ * accept bound arguments and resolve to the first row or undefined, all rows, and
+ * { changes, lastInsertRowid }, respectively; PostgreSQL always returns null for
+ * lastInsertRowid. query resolves to rows and defaults params to an empty array.
+ * exec accepts SQL without parameters. PostgreSQL prepare and query replace every
+ * `?`, even inside literals, and translate only supported SQLite syntax.
+ *
+ * Opening or migrating can reject with driver, filesystem, or SQL errors; migration
+ * failures may leave partial changes. prepare can throw synchronously, and execution
+ * and close errors propagate through their returned promises.
+ */
 export async function openDb({ env = process.env, dbPath } = {}) {
   const databaseUrl = env.DATABASE_URL;
   const db = databaseUrl ? await postgresAdapter(databaseUrl) : await sqliteAdapterFor(dbPath, env);
