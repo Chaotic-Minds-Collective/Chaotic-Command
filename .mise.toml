@@ -1,0 +1,3 @@
+# Chaotic Command needs Node.js 24 or newer (see package.json engines).
+[tools]
+node = "24"
