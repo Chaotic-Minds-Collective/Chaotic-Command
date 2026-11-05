@@ -96,16 +96,16 @@ Removing a bot:
 
 <!-- coderabbit-ai-generated:v1 -->
 
-<!-- coderabbit-ai-generated-section:v1:5cf7e40e6b83d68b51a42a219127b3114c51f22034cdbbacda2742973b71f9c0 -->
+<!-- coderabbit-ai-generated-section:v1:0924f9470b5b75e3c18446bd9f50c004f1dc4a25bdf44ca0699999aa16527145 -->
 
 To replace a token:
 
 1. Reset the token in the Discord Developer Portal and copy the new token.
 2. Remove the old connection in Chaotic Command using **Remove selected personal bot**. Removing it also deletes its server assignments.
-3. Connect the bot again using the new token.
+3. Connect the bot again using the new token. Reconnecting makes it your default bot, even if it was not the default before removal. If you previously used a different default, restore it so servers without a bot assignment continue using the intended bot: choose **Choose a server** to clear the server selection, choose your previous default under **Your Discord bots**, and select **Use selected bot**.
 4. Restore each server assignment by selecting the server, choosing the reconnected bot, and selecting **Use selected bot**.
 
-To reuse a bot after removal without resetting its token, connect the existing token again and restore any server assignments.
+To reuse a bot after removal without resetting its token, connect the existing token again, restore your previous default if needed as described above, and restore any server assignments.
 
 <!-- /coderabbit-ai-generated:v1 -->
 
