@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
+import { contentSecurityPolicy } from './csp.mjs';
 
 // Edge wrapper for Chaotic Command.
 // Runs the unchanged server.mjs on an internal loopback port and adds:
@@ -12,7 +13,7 @@ import { spawn } from 'node:child_process';
 const here = dirname(fileURLToPath(import.meta.url));
 const externalPort = Number(process.env.PORT || 3000);
 const internalPort = 3123 + (externalPort % 1000);
-const CSP = "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
+const CSP = contentSecurityPolicy({ fonts: true });
 const staticRoutes = new Map([
   ['/favicon.png', ['favicon.png', 'image/png']],
   ['/brand-icon-128.png', ['brand-icon-128.png', 'image/png']],
