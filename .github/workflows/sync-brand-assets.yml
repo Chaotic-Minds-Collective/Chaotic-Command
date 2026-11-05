@@ -1,16 +1,10 @@
 name: Sync brand assets
 
 on:
-  push:
-    branches:
-      - brand-assets
+  workflow_dispatch:
 
 permissions:
   contents: write
-
-concurrency:
-  group: sync-brand-assets
-  cancel-in-progress: true
 
 jobs:
   sync:
@@ -20,36 +14,6 @@ jobs:
         with:
           ref: brand-assets
 
-      - name: Download brand assets
+      - name: Placeholder - manual asset sync only
         shell: bash
-        env:
-          HOME_HTML_URL: https://app.littlebird.ai/f/57f80e34-d38a-4a54-90d5-f4cf0000f1ca
-          INDEX_HTML_URL: https://app.littlebird.ai/f/91a812e7-b821-45cc-b0a8-dfe442ae71c1
-          OG_URL: https://app.littlebird.ai/f/0eaaba4a-57bd-4af7-a42b-cc523740a0c0
-          FAVICON_URL: https://app.littlebird.ai/f/9c246e04-6021-43a2-a2c4-f4f330511637
-          BRAND128_URL: https://app.littlebird.ai/f/1f7c7738-b54b-4823-9e3c-a30193c5a801
-          BRAND180_URL: https://app.littlebird.ai/f/d1cd8916-639a-4b50-b220-2e085a69296f
-        run: |
-          set -euo pipefail
-          curl -fsSL $HOME_HTML_URL -o apps/command/web/home.html
-          curl -fsSL $INDEX_HTML_URL -o apps/command/web/index.html
-          curl -fsSL $OG_URL -o apps/command/web/og-image.jpg
-          curl -fsSL $FAVICON_URL -o apps/command/web/favicon.png
-          curl -fsSL $BRAND128_URL -o apps/command/web/brand-icon-128.png
-          curl -fsSL $BRAND180_URL -o apps/command/web/brand-icon-180.png
-          test $(stat -c%s apps/command/web/og-image.jpg) -gt 50000
-          test $(stat -c%s apps/command/web/favicon.png) -gt 1000
-          test $(stat -c%s apps/command/web/brand-icon-128.png) -gt 10000
-          test $(stat -c%s apps/command/web/brand-icon-180.png) -gt 30000
-          file apps/command/web/og-image.jpg | grep -q JPEG
-          file apps/command/web/favicon.png | grep -q PNG
-
-      - name: Commit brand assets
-        shell: bash
-        run: |
-          git config user.name littlebird-bot
-          git config user.email littlebird-bot@users.noreply.github.com
-          git add apps/command/web
-          if git diff --cached --quiet; then echo 'Nothing to commit'; exit 0; fi
-          git commit -m '[skip ci] Brand assets: new favicon, brand icons, og-image + og/link fixes'
-          git push origin brand-assets
+        run: echo 'Manual dispatch placeholder. Brand assets are committed directly.'
