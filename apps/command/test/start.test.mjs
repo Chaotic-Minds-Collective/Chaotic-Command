@@ -136,6 +136,18 @@ test('wrapper serves the homepage script with the font-enabled policy', async t 
   await response.body?.cancel();
 });
 
+test('wrapper serves the Apple touch icon without authentication', async t => {
+  const { url } = await startWrapper(t);
+  const response = await fetch(`${url}/brand-icon-180.png`, { redirect: 'manual' });
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('content-type'), 'image/png');
+  const png = Buffer.from(await response.arrayBuffer());
+  assert.deepEqual(png.subarray(0, 8), Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+  assert.equal(png.readUInt32BE(16), 180);
+  assert.equal(png.readUInt32BE(20), 180);
+  assert.deepEqual(png, readFileSync(join(dirname(entry), 'web', 'brand-icon-180.png')));
+});
+
 test('wrapper proxies the homepage and API to the app server with the font-enabled policy', async t => {
   const { url } = await startWrapper(t);
   const page = await fetch(`${url}/`);
