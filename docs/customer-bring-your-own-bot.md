@@ -39,11 +39,11 @@ If verification fails, check that the token was copied completely and that the b
 
 <!-- coderabbit-ai-generated:v1 -->
 
-<!-- coderabbit-ai-generated-section:v1:ffade748b2d2a64a8752ae324520ee236456f88a851f5d8f80a6d2325d787bc6 -->
+<!-- coderabbit-ai-generated-section:v1:7de3e01b8ab8ce7ed6b7d781438325540c09fcb5998f1b54a4361db1c35974b7 -->
 
 Connecting a bot automatically selects it as your default. The default is used for servers without their own bot assignment. To change it, clear the server selection by choosing **Choose a server**, choose a bot under **Your Discord bots**, and select **Use selected bot**. If a server is selected, **Use selected bot** changes that server’s assignment instead.
 
-Your default bot selection belongs to the current sign-in session. Signing out clears it; signing in again starts a new session without your previous default. After signing in, select your intended default again using the steps above. Connected bots and explicit server assignments remain saved to your account.
+The default is a sign-in session setting. It persists while you stay signed in, but signing out, signing in again, or reaching the session expiry starts a session without a default. Servers without their own bot assignment then use the shared bot if one is configured, or have no selected bot. Select your default bot again after signing in.
 
 <!-- /coderabbit-ai-generated:v1 -->
 
@@ -83,9 +83,7 @@ The key used to encrypt bot credentials is derived from the application's `SESSI
 
 <!-- coderabbit-ai-generated:v1 -->
 
-<!-- coderabbit-ai-generated-section:v1:d83e39525012458e726335399bfa8742caa7cbab6e3f3109489f063887a82979 -->
-
-Before removing a bot, record which servers are assigned to it and which bot is your current default. Removal deletes those server assignments, so you will need your record to restore them after reconnecting.
+<!-- coderabbit-ai-generated-section:v1:ec97e91cde46fe0a42023f552623f5612af176c3724a10006bc2edb3f9e36230 -->
 
 To disconnect a bot, open **Your Discord bots**, select the connected bot, and choose **Remove selected personal bot**. Confirm the browser prompt.
 
@@ -97,6 +95,8 @@ Removing a bot:
 - Removes your account's server assignments for that bot.
 - Leaves the Discord application and bot user intact; you can reconnect the same bot again later.
 - Does not revoke the Discord token. Reset the token in the Developer Portal if you no longer want it usable.
+
+Before removing a bot, note which servers use it. Removal deletes its per-server assignments, and Chaotic Command does not show a bot's server assignments anywhere, so you would need to reassign each server afterward from your own notes.
 
 <!-- coderabbit-ai-generated:v1 -->
 
@@ -128,15 +128,9 @@ Never use a production, customer, or active community server for first-time acce
 
 ### Token verification failed
 
-<!-- coderabbit-ai-generated:v1 -->
-
-<!-- coderabbit-ai-generated-section:v1:705233c151783cbbcf636e8d4f5c91449a138c7cb37ddb801b987b3d6bcd788a -->
-
 - Confirm the token was copied completely, with no spaces or truncation.
 - Confirm the bot still exists in the Discord Developer Portal.
 - If the bot is already connected, follow the [token replacement steps](#replace-or-remove-a-connected-bot). Otherwise, reset the token in the Developer Portal and connect the new token.
-
-<!-- /coderabbit-ai-generated:v1 -->
 
 ### The bot is not ready for a server
 
@@ -159,13 +153,7 @@ Removing a connection in Chaotic Command deletes the stored credential and your 
 
 ### The bot token may have been exposed
 
-<!-- coderabbit-ai-generated:v1 -->
-
-<!-- coderabbit-ai-generated-section:v1:94b357ea0827b8ad2fb97beccc6cc370dbb550e568fb015e0455c81bddbf3e0c -->
-
 If a token was pasted somewhere public, reset it immediately in the Discord Developer Portal (**Bot** > **Reset Token**). Resetting a token invalidates the previous one permanently. Then follow the remaining [token replacement steps](#replace-or-remove-a-connected-bot) to remove the old connection, reconnect, and restore its server assignments.
-
-<!-- /coderabbit-ai-generated:v1 -->
 
 ## Storage boundaries
 

@@ -39,7 +39,7 @@ Persistent records include:
 - Personal saved structures scoped to the Discord account that created them.
 - Shared notes scoped to a Discord server and available to current managers.
 - Encrypted customer-owned bot credentials.
-- Default bot selection and per-server bot assignments.
+- Per-server bot assignments. The default bot is a sign-in session setting, not a persistent record.
 
 The encryption key is derived from `SESSION_SECRET`. Keep it stable and protect it separately from the database. See [security and operations](security-and-operations.md).
 
