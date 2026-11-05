@@ -9,8 +9,8 @@ Requires **Node.js 24 or newer**. The runtime uses built-in HTTP, crypto and SQL
 ```sh
 cp .env.example .env
 # Fill in the values described below. Never commit .env.
-node --env-file-if-exists=.env apps/command/server.mjs
-# Or: npm start
+node --env-file-if-exists=.env apps/command/start.mjs
+# Or: npm start (runs the same entry point; start.mjs serves the homepage assets and runs server.mjs)
 ```
 
 Open http://localhost:3000 for the public product homepage. The command workspace is available at http://localhost:3000/command. Without credentials, the workspace explains configuration and safely disables login. To develop: `npm run dev`. Validate with `npm run check` and `npm test`, or run `node --test apps/command/test/*.test.mjs` directly. There is no frontend compilation step: the server serves the vanilla browser app directly.

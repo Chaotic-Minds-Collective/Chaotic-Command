@@ -64,4 +64,4 @@ const server = http.createServer((req, res) => {
 });
 server.requestTimeout = 30000;
 server.headersTimeout = 10000;
-server.listen(externalPort, process.env.HOST || '0.0.0.0', () => console.log('Chaotic Command edge listening. Open APP_ORIGIN in your browser.'));
+server.listen(externalPort, process.env.HOST || '127.0.0.1', () => console.log('Chaotic Command edge listening. Open APP_ORIGIN in your browser.'));

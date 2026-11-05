@@ -167,7 +167,7 @@ export function createApp(config = {}) {
         if (!url.searchParams.get('code')) throw new HttpError(400, 'Discord sign-in was cancelled.');
         let response;
         try { response = await fetcher('https://discord.com/api/v10/oauth2/token', { method: 'POST', signal: AbortSignal.timeout(15000), headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'ChaoticCommand/1.0 (+https://command.chaoticmindsgaming.com)' }, body: new URLSearchParams({ client_id: env.DISCORD_CLIENT_ID, client_secret: env.DISCORD_CLIENT_SECRET, grant_type: 'authorization_code', code: url.searchParams.get('code'), redirect_uri: `${origin}/auth/callback` }) }); } catch { throw new HttpError(502, 'Discord sign-in could not be reached. Start again.'); }
-        if (!response.ok) { console.error(`[oauth] token exchange failed: ${response.status} ${await response.text().catch(() => 'body-unavailable')}`); throw new HttpError(401, 'Discord sign-in failed. Start again.'); }
+        if (!response.ok) { const detail = await response.json().then(b => b?.error, () => undefined); console.error(`[oauth] token exchange failed: status ${response.status}${typeof detail === 'string' ? ` error ${detail.slice(0, 64)}` : ''}`); throw new HttpError(401, 'Discord sign-in failed. Start again.'); }
         const token = await response.json();
         if (!token.access_token || !Number.isFinite(token.expires_in) || token.expires_in <= 0) throw new HttpError(502, 'Invalid Discord token response.');
         const user = await discord('/users/@me', `Bearer ${token.access_token}`);
