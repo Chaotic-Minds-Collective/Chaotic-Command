@@ -21,17 +21,29 @@ This guide explains how a signed-in account can connect up to five Discord bots 
 
 ## Connect the bot token to Chaotic Command
 
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:f8120c5af4726bfffe9b83a6d5b06b43b51f78eec9f21760f11b216d2a77f1ee -->
+
 1. Sign in to Chaotic Command with your Discord account.
 2. Open **Your Discord bots**.
 3. Enter your bot's token.
-4. Select **Connect bot**.
+4. Select **Verify and connect bot**.
 5. Wait for verification. Chaotic Command verifies the token with Discord and stores it encrypted at rest.
+
+<!-- /coderabbit-ai-generated:v1 -->
 
 If verification fails, check that the token was copied completely and that the bot still exists in the Developer Portal.
 
 ## Choose a default bot
 
-After connecting a bot, select it as your default. The default is used for servers without their own bot assignment. Select **Set as default** next to the connected bot you want to use.
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:7de3e01b8ab8ce7ed6b7d781438325540c09fcb5998f1b54a4361db1c35974b7 -->
+
+Connecting a bot automatically selects it as your default. The default is used for servers without their own bot assignment. To change it, clear the server selection by choosing **Choose a server**, choose a bot under **Your Discord bots**, and select **Use selected bot**. If a server is selected, **Use selected bot** changes that server’s assignment instead.
+
+<!-- /coderabbit-ai-generated:v1 -->
 
 ## Assign a bot to a server
 
@@ -67,7 +79,13 @@ The key used to encrypt bot credentials is derived from the application's `SESSI
 
 ## Replace or remove a connected bot
 
-To disconnect a bot, open **Your Discord bots**, select the connected bot, and choose **Remove**. Confirm the browser prompt.
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:ec97e91cde46fe0a42023f552623f5612af176c3724a10006bc2edb3f9e36230 -->
+
+To disconnect a bot, open **Your Discord bots**, select the connected bot, and choose **Remove selected personal bot**. Confirm the browser prompt.
+
+<!-- /coderabbit-ai-generated:v1 -->
 
 Removing a bot:
 
@@ -76,7 +94,20 @@ Removing a bot:
 - Leaves the Discord application and bot user intact; you can reconnect the same bot again later.
 - Does not revoke the Discord token. Reset the token in the Developer Portal if you no longer want it usable.
 
-To reuse a bot after removal, connect the token again. If the token has expired or been reset, create a new token in the Developer Portal and connect it.
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:5cf7e40e6b83d68b51a42a219127b3114c51f22034cdbbacda2742973b71f9c0 -->
+
+To replace a token:
+
+1. Reset the token in the Discord Developer Portal and copy the new token.
+2. Remove the old connection in Chaotic Command using **Remove selected personal bot**. Removing it also deletes its server assignments.
+3. Connect the bot again using the new token.
+4. Restore each server assignment by selecting the server, choosing the reconnected bot, and selecting **Use selected bot**.
+
+To reuse a bot after removal without resetting its token, connect the existing token again and restore any server assignments.
+
+<!-- /coderabbit-ai-generated:v1 -->
 
 ## Test in a disposable server
 
@@ -93,9 +124,15 @@ Never use a production, customer, or active community server for first-time acce
 
 ### Token verification failed
 
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:705233c151783cbbcf636e8d4f5c91449a138c7cb37ddb801b987b3d6bcd788a -->
+
 - Confirm the token was copied completely, with no spaces or truncation.
 - Confirm the bot still exists in the Discord Developer Portal.
-- Reset the token in the Developer Portal and connect the new token.
+- If the bot is already connected, follow the [token replacement steps](#replace-or-remove-a-connected-bot). Otherwise, reset the token in the Developer Portal and connect the new token.
+
+<!-- /coderabbit-ai-generated:v1 -->
 
 ### The bot is not ready for a server
 
@@ -118,7 +155,13 @@ Removing a connection in Chaotic Command deletes the stored credential and your 
 
 ### The bot token may have been exposed
 
-If a token was pasted somewhere public, reset it immediately in the Discord Developer Portal (**Bot** > **Reset Token**), then reconnect the new token in Chaotic Command. Resetting a token invalidates the previous one permanently.
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:94b357ea0827b8ad2fb97beccc6cc370dbb550e568fb015e0455c81bddbf3e0c -->
+
+If a token was pasted somewhere public, reset it immediately in the Discord Developer Portal (**Bot** > **Reset Token**). Resetting a token invalidates the previous one permanently. Then follow the remaining [token replacement steps](#replace-or-remove-a-connected-bot) to remove the old connection, reconnect, and restore its server assignments.
+
+<!-- /coderabbit-ai-generated:v1 -->
 
 ## Storage boundaries
 
