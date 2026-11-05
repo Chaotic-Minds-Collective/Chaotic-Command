@@ -10,6 +10,8 @@ const applicationId = process.env.DISCORD_APPLICATION_ID;
 const guildId = process.env.DISCORD_GUILD_ID;
 const logFormat = process.env.LOG_FORMAT === 'json' ? 'json' : 'text';
 const healthPort = Number(process.env.BOT_HEALTH_PORT || 0);
+// Loopback by default; set BOT_HEALTH_HOST=0.0.0.0 only inside a container network that needs it.
+const healthHost = process.env.BOT_HEALTH_HOST || '127.0.0.1';
 
 /** Return a required environment value, or log an error and exit if it is missing. */
 function requireEnv(name, value) {
@@ -75,7 +77,7 @@ async function discordRequest(path, options = {}) {
     headers: {
       Authorization: `Bot ${token}`,
       'Content-Type': 'application/json',
-      ...(options.headers ?? {}),
+      ...options.headers,
     },
   });
 
@@ -270,7 +272,7 @@ function startHealthEndpoint() {
     res.writeHead(healthy ? 200 : 503, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(status));
   });
-  server.listen(healthPort, '0.0.0.0', () => log('info', 'health endpoint listening', { port: healthPort }));
+  server.listen(healthPort, healthHost, () => log('info', 'health endpoint listening', { host: healthHost, port: healthPort }));
 }
 
 // ---------------------------------------------------------------- lifecycle

@@ -25,6 +25,7 @@ npm run start:bot
 | `DISCORD_APPLICATION_ID` | no | Validated against the token at startup; startup fails on mismatch. |
 | `DISCORD_GUILD_ID` | no | Dev guild used for slash-command registration. Registration is skipped when unset. |
 | `BOT_HEALTH_PORT` | no | Port for the HTTP health endpoint. `0` disables it (default). |
+| `BOT_HEALTH_HOST` | no | Bind address for the health endpoint; defaults to `127.0.0.1`. |
 | `LOG_FORMAT` | no | `text` (default) or `json` for structured logs. |
 
 ## Connection lifecycle
@@ -54,7 +55,7 @@ When `BOT_HEALTH_PORT` is set, the worker serves `GET /health` on that port:
 - `200` with a JSON status object when the gateway state is `ready`.
 - `503` otherwise.
 
-The status object includes state, connected-since and last-ready timestamps, last sequence number, reconnect attempt count, and the last error (`lastError`). The endpoint binds to `0.0.0.0` and does not authenticate requests. Restrict access to a trusted monitoring network.
+The status object includes state, connected-since and last-ready timestamps, last sequence number, reconnect attempt count, and the last error (`lastError`). The endpoint binds to `127.0.0.1` by default and does not authenticate requests. Set `BOT_HEALTH_HOST=0.0.0.0` when needed for a trusted monitoring network, and restrict access to that network.
 
 ## Graceful shutdown
 

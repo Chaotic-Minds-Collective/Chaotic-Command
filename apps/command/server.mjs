@@ -4,6 +4,7 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomBytes, createHash, createCipheriv, createDecipheriv, timingSafeEqual } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
+import { contentSecurityPolicy } from './csp.mjs';
 import { HttpError, templates, hasPermission, canManage, validateId, validateStructure, auditGuild, makePlan, applyPlan, createGuildLock } from './core.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -48,13 +49,14 @@ export function createApp(config = {}) {
   const cookie = (sid, age = 28800) => `cc_session=${sid}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${age}${secure ? '; Secure' : ''}`;
   const ensureConfigured = () => { if (!configured) throw new HttpError(503, 'Configure Discord credentials and SESSION_SECRET on the server, then restart.'); };
   const json = (res, status, body) => { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(body)); };
+  /** Call Discord with bounded retries for rate limits and translate upstream failures. */
   async function discord(path, token, options = {}, attempt = 0) {
     let response;
     try {
       response = await fetcher(`https://discord.com/api/v10${path}`, { ...options, signal: AbortSignal.timeout(15000), headers: { Authorization: token, ...(options.body ? { 'Content-Type': 'application/json' } : {}), 'User-Agent': 'ChaoticCommand/1.0 (+https://command.chaoticmindsgaming.com)', ...options.headers } });
     } catch { throw new HttpError(502, 'Discord could not be reached. Try again.'); }
     if (response.status === 429 && attempt < 3) {
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
       const delay = Number(data.retry_after);
       if (!Number.isFinite(delay) || delay < 0 || delay > 30) throw new HttpError(429, 'Discord rate limit reached. Try again later.');
       await new Promise(r => setTimeout(r, delay * 1000 + 100));
@@ -105,12 +107,16 @@ export function createApp(config = {}) {
     if (!hasPermission(permissions, 16n) || !hasPermission(permissions, 268435456n)) throw new HttpError(403, 'Bot needs Manage Channels and Manage Roles. Place its role above roles it creates.');
     return { roles, channels, bot: chosen };
   }
+  /** Parse a JSON request body after enforcing the byte limit. */
   async function body(req) {
-    let text = '';
+    const chunks = [];
+    let size = 0;
     for await (const chunk of req) {
-      text += chunk;
-      if (Buffer.byteLength(text) > 8192) throw new HttpError(413, 'Request too large.');
+      size += chunk.length;
+      if (size > 8192) throw new HttpError(413, 'Request too large.');
+      chunks.push(chunk);
     }
+    const text = Buffer.concat(chunks).toString('utf8');
     try { return JSON.parse(text || '{}'); } catch { throw new HttpError(400, 'Invalid JSON.'); }
   }
   const assets = new Map([
@@ -124,7 +130,7 @@ export function createApp(config = {}) {
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'no-referrer');
-    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
+    res.setHeader('Content-Security-Policy', contentSecurityPolicy());
     if (secure) res.setHeader('Strict-Transport-Security', 'max-age=31536000');
     let sid = /(?:^|;\s*)cc_session=([a-f0-9]{64})(?:;|$)/.exec(req.headers.cookie || '')?.[1];
     let session;
@@ -163,7 +169,7 @@ export function createApp(config = {}) {
         if (!url.searchParams.get('code')) throw new HttpError(400, 'Discord sign-in was cancelled.');
         let response;
         try { response = await fetcher('https://discord.com/api/v10/oauth2/token', { method: 'POST', signal: AbortSignal.timeout(15000), headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'ChaoticCommand/1.0 (+https://command.chaoticmindsgaming.com)' }, body: new URLSearchParams({ client_id: env.DISCORD_CLIENT_ID, client_secret: env.DISCORD_CLIENT_SECRET, grant_type: 'authorization_code', code: url.searchParams.get('code'), redirect_uri: `${origin}/auth/callback` }) }); } catch { throw new HttpError(502, 'Discord sign-in could not be reached. Start again.'); }
-        if (!response.ok) { console.error(`[oauth] token exchange failed: ${response.status} ${await response.text().catch(() => 'body-unavailable')}`); throw new HttpError(401, 'Discord sign-in failed. Start again.'); }
+        if (!response.ok) { const detail = await response.json().then(b => b?.error, () => undefined); console.error(`[oauth] token exchange failed: status ${response.status}${typeof detail === 'string' ? ` error ${detail.slice(0, 64)}` : ''}`); throw new HttpError(401, 'Discord sign-in failed. Start again.'); }
         const token = await response.json();
         if (!token.access_token || !Number.isFinite(token.expires_in) || token.expires_in <= 0) throw new HttpError(502, 'Invalid Discord token response.');
         const user = await discord('/users/@me', `Bearer ${token.access_token}`);
