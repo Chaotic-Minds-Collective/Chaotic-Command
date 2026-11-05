@@ -1,0 +1,19 @@
+name: Sync brand assets
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: brand-assets
+
+      - name: Placeholder - manual asset sync only
+        shell: bash
+        run: echo 'Manual dispatch placeholder. Brand assets are committed directly.'
