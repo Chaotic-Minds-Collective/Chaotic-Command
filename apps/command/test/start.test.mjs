@@ -202,6 +202,11 @@ test('wrapper waits for its backend before exiting', { skip: process.platform !=
     await new Promise(resolve => setTimeout(resolve, 300));
     assert.equal(child.exitCode, null);
     assert.equal(await portIsFree(3123 + (port % 1000)), false);
+    child.kill('SIGTERM');
+    await new Promise(resolve => setTimeout(resolve, 300));
+    assert.equal(child.exitCode, null);
+    assert.equal(child.signalCode, null);
+    assert.equal(await portIsFree(3123 + (port % 1000)), false);
   } finally {
     process.kill(backendPid, 'SIGCONT');
   }

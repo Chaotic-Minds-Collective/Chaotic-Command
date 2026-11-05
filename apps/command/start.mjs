@@ -56,7 +56,7 @@ function stop(code = 0) {
   }, 30000);
   finish();
 }
-for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => stop());
+for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => stop());
 child.once('error', error => { console.error('Could not start server.mjs:', error.message); stop(1); });
 child.once('close', (code, signal) => {
   childClosed = true;
