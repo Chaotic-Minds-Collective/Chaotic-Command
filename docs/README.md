@@ -20,13 +20,10 @@ End-user and operator documentation for Chaotic Command itself - previously host
 | --- | --- |
 | [customer-bring-your-own-bot.md](customer-bring-your-own-bot.md) | Connecting and operating a customer-owned Discord bot (credentials, storage, removal behavior) |
 | [discord-bot-gateway.md](discord-bot-gateway.md) | Discord bot gateway architecture and connection lifecycle |
-| [development-audit-2026-10-30.md](development-audit-2026-10-30.md) | Current development audit: verified behavior, limits, and next steps |
-| [development-audit-supplement-2026-10-31.md](development-audit-supplement-2026-10-31.md) | Follow-up audit notes supplementing the October 30 audit |
-| [discord-roles-permissions-operations.md](discord-roles-permissions-operations.md) | Role permission model and safe operations guidance |
-| [environment-reference.md](environment-reference.md) | Environment variables and runtime configuration reference |
-| [discord-websocket-notes.md](discord-websocket-notes.md) | Notes on Discord WebSocket behavior relevant to the bot |
-| [oauth-flow.md](oauth-flow.md) | Discord OAuth flow implementation details |
-| [apply-locking.md](apply-locking.md) | Per-server operation locking for apply operations |
+| [development-audit-2026-10-30.md](development-audit-2026-10-30.md) | Historical audit snapshot (2026-10-30): verified behavior, limits, and next steps as of that date; see the [follow-up](development-audit-2026-10-30-followup.md) for later status |
+| [development-audit-2026-10-30-followup.md](development-audit-2026-10-30-followup.md) | Follow-up audit covering changes landed after the October 30 snapshot |
+| [role-permissions.md](product/admins/role-permissions.md) | Role permission model and safe operations guidance (product guide) |
+| [local-development.md](product/developers/local-development.md) | Local setup, environment variables, and runtime configuration (product guide) |
 
 ## Conventions
 

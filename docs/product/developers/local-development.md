@@ -56,6 +56,8 @@ Or start it without watch mode:
 npm start
 ```
 
+If you configure Discord OAuth locally, first register the callback URL `http://localhost:3000/auth/callback` as a redirect URI in your Discord application's OAuth2 settings.
+
 Open `http://localhost:3000` for the public product homepage. Open `http://localhost:3000/command` for the command workspace. Without OAuth configuration, the workspace explains the missing configuration and safely disables sign-in. OAuth completion returns signed-in users to `/command`; the callback URL remains `http://localhost:3000/auth/callback` for this local origin.
 
 ## Run checks

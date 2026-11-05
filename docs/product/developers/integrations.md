@@ -10,7 +10,7 @@ The application uses Discord OAuth for user sign-in and server listing. It uses 
 
 The current OAuth flow requests the identity and server-list access required by the app. A selected shared or customer-owned bot performs server operations. Customer-owned bot tokens are encrypted at rest and scoped to the account that connected them.
 
-The current application does not use a long-running Discord Gateway connection or privileged Gateway intents.
+apps/command does not use a long-running Discord Gateway connection or privileged Gateway intents. The separate bot gateway runtime is documented in [discord-bot-gateway.md](../../discord-bot-gateway.md).
 
 ## Composio status
 

@@ -36,7 +36,7 @@ You still sign in to Chaotic Command with **Sign in with Discord**. A personal b
    Authorize the selected bot for the intended server.
 
 6. **Check role position**
-   In Discord server settings, move the bot's role above the roles Chaotic Command may need to create or manage. Discord role hierarchy can prevent a bot from managing roles below its own role.
+   In Discord server settings, move the bot's role above the roles Chaotic Command may need to create or manage. Discord role hierarchy can prevent a bot from managing roles above its own role.
 
 7. **Return to Chaotic Command**
    Reselect the server. The app checks the selected bot's readiness.

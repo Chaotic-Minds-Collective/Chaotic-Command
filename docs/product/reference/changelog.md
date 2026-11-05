@@ -16,7 +16,7 @@ Merged in [PR #17](https://github.com/Chaotic-Minds-Collective/Chaotic-Command/p
 - Label the dashboard artwork as illustrative rather than live account data.
 - Add offline tests for the homepage, stylesheet, workspace route, app assets, and OAuth redirect.
 
-This is a merged source change, not confirmation of production deployment or live Discord acceptance. It does not change Discord API permissions, authentication ownership, SQLite storage, credential encryption, preview binding, or apply safeguards. See the latest development audit in this repository's docs folder, such as [development-audit-2026-10-30.md](../../development-audit-2026-10-30.md), for the current verification and deployment limits.
+This is a merged source change, not confirmation of production deployment or live Discord acceptance. It does not change Discord API permissions, authentication ownership, SQLite storage, credential encryption, preview binding, or apply safeguards. See the [development audit](../../development-audit-2026-10-30.md) (historical snapshot as of 2026-10-30) and its [follow-up](../../development-audit-2026-10-30-followup.md) for the latest verification and deployment limits.
 
 ## October 30, 2026
 
@@ -100,7 +100,7 @@ The current application includes:
 
 The application does not yet create new Discord guilds, perform full existing-server reorganization, run moderation or ticket workflows, configure private-channel policies, or run long-lived automations. See [current feature status](feature-status.md) for the complete scope.
 
-The original Bit/React design workspace remains preserved separately from the active Node.js runtime. The public homepage work was ported from `website/rebuild-foundation` to a main-based branch and merged through PR #17. Use the inspected `main` baseline in the [development audit](../../development-audit-2026-10-30.md), not the older branch, to determine current behavior.
+The original Bit/React design workspace remains preserved separately from the active Node.js runtime. The public homepage work was ported from `website/rebuild-foundation` to a main-based branch and merged through PR #17. Use the inspected `main` baseline in the [development audit](../../development-audit-2026-10-30.md) (historical snapshot) and its [follow-up](../../development-audit-2026-10-30-followup.md), not the older branch, to determine current behavior.
 
 ## Keeping this history current
 

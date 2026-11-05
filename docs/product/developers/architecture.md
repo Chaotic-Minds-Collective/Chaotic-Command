@@ -62,4 +62,4 @@ The original prototype uses mock data and is not wired into the active standalon
 - The existing-server audit is read-only. Full move, rename, reorder, delete, and permission-edit operations are not implemented.
 - The AI workflow is a manual prompt and JSON handoff. The app does not call an AI provider.
 
-See the latest development audit in this repository's docs folder, such as [development-audit-2026-10-30.md](../../development-audit-2026-10-30.md), before planning a larger change.
+See the [development audit](../../development-audit-2026-10-30.md) (historical snapshot as of 2026-10-30) and its [follow-up](../../development-audit-2026-10-30-followup.md) before planning a larger change.

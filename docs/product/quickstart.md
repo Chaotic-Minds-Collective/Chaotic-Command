@@ -22,6 +22,7 @@ Use this quickstart to create your first reviewed server setup with Chaotic Comm
    Select the server you want to prepare. If it does not appear, confirm that you are signed in to the correct Discord account and have the required server permission.
 
 3. **Install the bot**
+   Chaotic Command can only provide an installation link when a bot is available. When no shared bot is configured, connect or select a personal bot first (see [connecting your own bot](../customer-bring-your-own-bot.md)).
    If the server status says the bot is not ready, use the installation link shown by Chaotic Command. The bot requests Manage Channels and Manage Roles, not Administrator. After installation, return to the app and select the server again.
 
 4. **Choose a built-in template or custom structure**
