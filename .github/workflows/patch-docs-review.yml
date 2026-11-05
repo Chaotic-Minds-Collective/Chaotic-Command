@@ -1,0 +1,54 @@
+name: Patch docs review fixes
+on:
+  push:
+    branches:
+      - docs/product-guides
+permissions:
+  contents: write
+concurrency:
+  group: patch-docs-review
+  cancel-in-progress: false
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply asserted review fixes
+        run: |
+          python3 - <<'PYEOF'
+          import pathlib
+          edits = [
+            ("docs/product/developers/integrations.md", "The current application does not use a long-running Discord Gateway connection or privileged Gateway intents.", "apps/command does not use a long-running Discord Gateway connection or privileged Gateway intents. The separate bot gateway runtime is documented in [discord-bot-gateway.md](../../discord-bot-gateway.md)."),
+            ("docs/product/developers/local-development.md", "Open `http://localhost:3000` for the public product homepage.", "If you configure Discord OAuth locally, first register the callback URL `http://localhost:3000/auth/callback` as a redirect URI in your Discord application's OAuth2 settings.\n\nOpen `http://localhost:3000` for the public product homepage."),
+            ("docs/product/owners/install-the-bot.md", "Discord role hierarchy can prevent a bot from managing roles below its own role.", "Discord role hierarchy can prevent a bot from managing roles above its own role."),
+            ("docs/product/quickstart.md", "If the server status says the bot is not ready, use the installation link shown by Chaotic Command.", "Chaotic Command can only provide an installation link when a bot is available. When no shared bot is configured, connect or select a personal bot first (see [connecting your own bot](../customer-bring-your-own-bot.md)).\n   If the server status says the bot is not ready, use the installation link shown by Chaotic Command."),
+            ("docs/README.md", "| [development-audit-2026-10-30.md](development-audit-2026-10-30.md) | Current development audit: verified behavior, limits, and next steps |", "| [development-audit-2026-10-30.md](development-audit-2026-10-30.md) | Historical audit snapshot (2026-10-30): verified behavior, limits, and next steps as of that date; see the [follow-up](development-audit-2026-10-30-followup.md) for later status |"),
+            ("docs/README.md", "| [development-audit-supplement-2026-10-31.md](development-audit-supplement-2026-10-31.md) | Follow-up audit notes supplementing the October 30 audit |", "| [development-audit-2026-10-30-followup.md](development-audit-2026-10-30-followup.md) | Follow-up audit covering changes landed after the October 30 snapshot |"),
+            ("docs/README.md", "| [discord-roles-permissions-operations.md](discord-roles-permissions-operations.md) | Role permission model and safe operations guidance |", "| [role-permissions.md](product/admins/role-permissions.md) | Role permission model and safe operations guidance (product guide) |"),
+            ("docs/README.md", "| [environment-reference.md](environment-reference.md) | Environment variables and runtime configuration reference |", "| [local-development.md](product/developers/local-development.md) | Local setup, environment variables, and runtime configuration (product guide) |"),
+            ("docs/README.md", "| [discord-websocket-notes.md](discord-websocket-notes.md) | Notes on Discord WebSocket behavior relevant to the bot |\n", ""),
+            ("docs/README.md", "| [oauth-flow.md](oauth-flow.md) | Discord OAuth flow implementation details |\n", ""),
+            ("docs/README.md", "| [apply-locking.md](apply-locking.md) | Per-server operation locking for apply operations |\n", ""),
+            ("docs/product/developers/architecture.md", "See the latest development audit in this repository's docs folder, such as [development-audit-2026-10-30.md](../../development-audit-2026-10-30.md), before planning a larger change.", "See the [development audit](../../development-audit-2026-10-30.md) (historical snapshot as of 2026-10-30) and its [follow-up](../../development-audit-2026-10-30-followup.md) before planning a larger change."),
+            ("docs/product/reference/changelog.md", "See the latest development audit in this repository's docs folder, such as [development-audit-2026-10-30.md](../../development-audit-2026-10-30.md), for the current verification and deployment limits.", "See the [development audit](../../development-audit-2026-10-30.md) (historical snapshot as of 2026-10-30) and its [follow-up](../../development-audit-2026-10-30-followup.md) for the latest verification and deployment limits."),
+            ("docs/product/reference/changelog.md", "Use the inspected `main` baseline in the [development audit](../../development-audit-2026-10-30.md), not the older branch, to determine current behavior.", "Use the inspected `main` baseline in the [development audit](../../development-audit-2026-10-30.md) (historical snapshot) and its [follow-up](../../development-audit-2026-10-30-followup.md), not the older branch, to determine current behavior.")
+          ]
+          for path, old, new in edits:
+              p = pathlib.Path(path)
+              s = p.read_text()
+              if new and new in s:
+                  print(path, "already applied")
+                  continue
+              assert s.count(old) == 1, f"{path}: match count {s.count(old)}"
+              p.write_text(s.replace(old, new))
+              print(path, "patched")
+          PYEOF
+      - name: Commit and push
+        run: |
+          git config user.name "littlebird-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm -f .github/workflows/patch-docs-review.yml 2>/dev/null || true
+          git add docs/README.md docs/product
+          git diff --cached --quiet && echo "nothing to commit" && exit 0
+          git commit -m "Apply docs review fixes: gateway scope, OAuth redirect note, role hierarchy, quickstart prerequisite, README index, audit snapshot notes"
+          git push
