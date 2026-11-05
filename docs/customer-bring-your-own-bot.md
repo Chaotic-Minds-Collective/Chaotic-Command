@@ -39,9 +39,11 @@ If verification fails, check that the token was copied completely and that the b
 
 <!-- coderabbit-ai-generated:v1 -->
 
-<!-- coderabbit-ai-generated-section:v1:7de3e01b8ab8ce7ed6b7d781438325540c09fcb5998f1b54a4361db1c35974b7 -->
+<!-- coderabbit-ai-generated-section:v1:ffade748b2d2a64a8752ae324520ee236456f88a851f5d8f80a6d2325d787bc6 -->
 
 Connecting a bot automatically selects it as your default. The default is used for servers without their own bot assignment. To change it, clear the server selection by choosing **Choose a server**, choose a bot under **Your Discord bots**, and select **Use selected bot**. If a server is selected, **Use selected bot** changes that server’s assignment instead.
+
+Your default bot selection belongs to the current sign-in session. Signing out clears it; signing in again starts a new session without your previous default. After signing in, select your intended default again using the steps above. Connected bots and explicit server assignments remain saved to your account.
 
 <!-- /coderabbit-ai-generated:v1 -->
 
@@ -81,7 +83,9 @@ The key used to encrypt bot credentials is derived from the application's `SESSI
 
 <!-- coderabbit-ai-generated:v1 -->
 
-<!-- coderabbit-ai-generated-section:v1:ec97e91cde46fe0a42023f552623f5612af176c3724a10006bc2edb3f9e36230 -->
+<!-- coderabbit-ai-generated-section:v1:d83e39525012458e726335399bfa8742caa7cbab6e3f3109489f063887a82979 -->
+
+Before removing a bot, record which servers are assigned to it and which bot is your current default. Removal deletes those server assignments, so you will need your record to restore them after reconnecting.
 
 To disconnect a bot, open **Your Discord bots**, select the connected bot, and choose **Remove selected personal bot**. Confirm the browser prompt.
 
