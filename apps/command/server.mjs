@@ -49,6 +49,7 @@ export function createApp(config = {}) {
   const cookie = (sid, age = 28800) => `cc_session=${sid}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${age}${secure ? '; Secure' : ''}`;
   const ensureConfigured = () => { if (!configured) throw new HttpError(503, 'Configure Discord credentials and SESSION_SECRET on the server, then restart.'); };
   const json = (res, status, body) => { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(body)); };
+  /** Call Discord with bounded retries for rate limits and translate upstream failures. */
   async function discord(path, token, options = {}, attempt = 0) {
     let response;
     try {
@@ -106,6 +107,7 @@ export function createApp(config = {}) {
     if (!hasPermission(permissions, 16n) || !hasPermission(permissions, 268435456n)) throw new HttpError(403, 'Bot needs Manage Channels and Manage Roles. Place its role above roles it creates.');
     return { roles, channels, bot: chosen };
   }
+  /** Parse a JSON request body after enforcing the byte limit. */
   async function body(req) {
     const chunks = [];
     let size = 0;

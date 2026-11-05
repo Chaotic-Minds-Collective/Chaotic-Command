@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node --env-file-if-exists=.env apps/command/start.mjs",
     "start:bot": "node --env-file-if-exists=.env apps/discord-bot/index.mjs",
-    "dev": "mise exec -- sh -c '[ -f .env ] || : > .env; exec node --watch --watch-path=apps/command/start.mjs --watch-path=apps/command/server.mjs --watch-path=apps/command/core.mjs --watch-path=apps/command/csp.mjs --watch-path=apps/command/web --env-file-if-exists=.env apps/command/start.mjs'",
+    "dev": "node --watch --watch-path=apps/command/start.mjs --watch-path=apps/command/server.mjs --watch-path=apps/command/core.mjs --watch-path=apps/command/csp.mjs --watch-path=apps/command/web --env-file-if-exists=.env apps/command/start.mjs",
     "dev:bot": "node --watch --env-file-if-exists=.env apps/discord-bot/index.mjs",
     "test": "node --test apps/command/test/*.test.mjs apps/discord-bot/test/*.test.mjs",
     "check": "node --check apps/command/server.mjs && node --check apps/command/core.mjs && node --check apps/command/csp.mjs && node --check apps/command/start.mjs && node --check apps/command/web/app.js && node --check apps/discord-bot/index.mjs"

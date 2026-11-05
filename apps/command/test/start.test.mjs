@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { createServer } from 'node:net';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { connect, createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -40,32 +40,33 @@ async function freeWrapperPort() {
 }
 
 /** Start the edge wrapper as its own process and wait until both the wrapper and the app server are ready. */
-async function startWrapper(t) {
+async function startWrapper(t, options = {}) {
   const port = await freeWrapperPort();
   const dataDir = mkdtempSync(join(tmpdir(), 'cc-start-test-'));
-  t.after(() => rmSync(dataDir, { recursive: true, force: true }));
   const child = spawn(process.execPath, [entry], {
-    env: { PATH: process.env.PATH, PORT: String(port), HOST: '127.0.0.1', DATA_DIR: dataDir, APP_ORIGIN: `http://127.0.0.1:${port}` },
+    cwd: options.cwd,
+    env: { PATH: process.env.PATH, PORT: String(port), HOST: '127.0.0.1', DATA_DIR: dataDir, APP_ORIGIN: `http://127.0.0.1:${port}`, ...options.env },
     stdio: ['ignore', 'pipe', 'pipe']
   });
   let output = '';
   child.stdout.on('data', chunk => { output += chunk; });
   child.stderr.on('data', chunk => { output += chunk; });
-  t.after(() => new Promise(resolve => {
-    if (child.exitCode !== null || child.signalCode !== null) return resolve();
-    child.once('exit', resolve);
-    child.kill('SIGTERM');
-  }));
+  t.after(async () => {
+    if (child.exitCode === null && child.signalCode === null) {
+      await new Promise(resolve => { child.once('exit', resolve); child.kill('SIGTERM'); });
+    }
+    rmSync(dataDir, { recursive: true, force: true });
+  });
   const deadline = Date.now() + 20000;
   while (!(output.includes('edge listening') && output.includes('Chaotic Command listening'))) {
     if (child.exitCode !== null || Date.now() > deadline) throw new Error(`Wrapper did not start:\n${output}`);
     await new Promise(resolve => setTimeout(resolve, 100));
   }
-  return `http://127.0.0.1:${port}`;
+  return { url: `http://127.0.0.1:${port}`, port, child };
 }
 
 test('wrapper serves the homepage script with the font-enabled policy', async t => {
-  const url = await startWrapper(t);
+  const { url } = await startWrapper(t);
   const response = await fetch(`${url}/home.js`);
   assert.equal(response.status, 200);
   assert.match(response.headers.get('content-type'), /^text\/javascript/);
@@ -74,7 +75,7 @@ test('wrapper serves the homepage script with the font-enabled policy', async t 
 });
 
 test('wrapper proxies the homepage and API to the app server with the font-enabled policy', async t => {
-  const url = await startWrapper(t);
+  const { url } = await startWrapper(t);
   const page = await fetch(`${url}/`);
   assert.equal(page.status, 200);
   assert.match(await page.text(), /Chaotic Command/);
@@ -86,22 +87,68 @@ test('wrapper proxies the homepage and API to the app server with the font-enabl
 });
 
 test('wrapper stops its app server when it receives SIGTERM', async t => {
-  const port = await freeWrapperPort();
-  const dataDir = mkdtempSync(join(tmpdir(), 'cc-start-test-'));
-  t.after(() => rmSync(dataDir, { recursive: true, force: true }));
-  const child = spawn(process.execPath, [entry], {
-    env: { PATH: process.env.PATH, PORT: String(port), HOST: '127.0.0.1', DATA_DIR: dataDir, APP_ORIGIN: `http://127.0.0.1:${port}` },
-    stdio: ['ignore', 'pipe', 'pipe']
-  });
-  let output = '';
-  child.stdout.on('data', chunk => { output += chunk; });
-  const deadline = Date.now() + 20000;
-  while (!output.includes('Chaotic Command listening')) {
-    if (child.exitCode !== null || Date.now() > deadline) throw new Error(`Wrapper did not start:\n${output}`);
-    await new Promise(resolve => setTimeout(resolve, 100));
-  }
+  const { port, child } = await startWrapper(t);
   const exited = new Promise(resolve => child.once('exit', code => resolve(code)));
   child.kill('SIGTERM');
   assert.equal(await exited, 0);
   assert.equal(await portIsFree(port), true);
+  assert.equal(await portIsFree(3123 + (port % 1000)), true);
+});
+
+test('wrapper contains invalid request targets', async t => {
+  const { port, url } = await startWrapper(t);
+  const response = await new Promise((resolve, reject) => {
+    const socket = connect(port, '127.0.0.1', () => socket.write('GET http://[invalid/ HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n'));
+    let data = '';
+    socket.on('data', chunk => { data += chunk; });
+    socket.on('end', () => resolve(data));
+    socket.on('error', reject);
+  });
+  assert.match(response, /^HTTP\/1\.1 400 /);
+  assert.equal((await fetch(`${url}/api/health`)).status, 200);
+});
+
+test('relative and default data directories use the caller working directory', async t => {
+  for (const dataDir of ['relative-data', '']) {
+    const cwd = mkdtempSync(join(tmpdir(), 'cc-start-cwd-'));
+    t.after(() => rmSync(cwd, { recursive: true, force: true }));
+    const { child } = await startWrapper(t, { cwd, env: { DATA_DIR: dataDir } });
+    assert.equal(existsSync(join(cwd, dataDir || '.data', 'command.sqlite')), true);
+    const exited = new Promise(resolve => child.once('exit', resolve));
+    child.kill('SIGTERM');
+    assert.equal(await exited, 0);
+  }
+});
+
+test('wrapper waits for its backend before exiting', { skip: process.platform !== 'linux' }, async t => {
+  const { port, child } = await startWrapper(t);
+  const backendPid = Number(readFileSync(`/proc/${child.pid}/task/${child.pid}/children`, 'utf8').trim());
+  assert.ok(backendPid > 0);
+  process.kill(backendPid, 'SIGSTOP');
+  const exited = new Promise(resolve => child.once('exit', resolve));
+  try {
+    child.kill('SIGTERM');
+    await new Promise(resolve => setTimeout(resolve, 300));
+    assert.equal(child.exitCode, null);
+    assert.equal(await portIsFree(3123 + (port % 1000)), false);
+  } finally {
+    process.kill(backendPid, 'SIGCONT');
+  }
+  assert.equal(await exited, 0);
+  assert.equal(await portIsFree(3123 + (port % 1000)), true);
+});
+
+test('edge listen failure shuts down the backend', async t => {
+  const port = await freeWrapperPort();
+  const occupied = createServer();
+  await new Promise((resolve, reject) => { occupied.once('error', reject); occupied.listen(port, '127.0.0.1', resolve); });
+  t.after(() => new Promise(resolve => occupied.close(resolve)));
+  const dataDir = mkdtempSync(join(tmpdir(), 'cc-start-test-'));
+  t.after(() => rmSync(dataDir, { recursive: true, force: true }));
+  const child = spawn(process.execPath, [entry], {
+    env: { PATH: process.env.PATH, PORT: String(port), HOST: '127.0.0.1', DATA_DIR: dataDir, APP_ORIGIN: `http://127.0.0.1:${port}` },
+    stdio: 'ignore'
+  });
+  assert.equal(await new Promise(resolve => child.once('exit', resolve)), 1);
+  assert.equal(await portIsFree(3123 + (port % 1000)), true);
 });
