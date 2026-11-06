@@ -168,7 +168,22 @@ export function createApp(config = {}) {
         delete session.oauth; persist();
         if (!url.searchParams.get('code')) throw new HttpError(400, 'Discord sign-in was cancelled.');
         let response;
-        try { response = await fetcher('https://discord.com/api/v10/oauth2/token', { method: 'POST', signal: AbortSignal.timeout(15000), headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'ChaoticCommand/1.0 (+https://command.chaoticmindsgaming.com)' }, body: new URLSearchParams({ client_id: env.DISCORD_CLIENT_ID, client_secret: env.DISCORD_CLIENT_SECRET, grant_type: 'authorization_code', code: url.searchParams.get('code'), redirect_uri: `${origin}/auth/callback` }) }); } catch { throw new HttpError(502, 'Discord sign-in could not be reached. Start again.'); }
+        let attempt = 0;
+        const tokenParams = new URLSearchParams({ client_id: env.DISCORD_CLIENT_ID, client_secret: env.DISCORD_CLIENT_SECRET, grant_type: 'authorization_code', code: url.searchParams.get('code'), redirect_uri: `${origin}/auth/callback` });
+        while (true) {
+          try { response = await fetcher('https://discord.com/api/v10/oauth2/token', { method: 'POST', signal: AbortSignal.timeout(15000), headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'ChaoticCommand/1.0 (+https://command.chaoticmindsgaming.com)' }, body: tokenParams }); }
+          catch { if (attempt < 3) { attempt++; await new Promise(r => setTimeout(r, attempt * 1500)); continue; } throw new HttpError(502, 'Discord sign-in could not be reached. Start again.'); }
+          if (response.status === 429 && attempt < 3) {
+            const limit = await response.json().then(b => Number(b?.retry_after), () => NaN);
+            const delay = Number.isFinite(limit) && limit >= 0 && limit <= 10 ? limit : 2;
+            console.warn(`[oauth] token exchange rate limited; retrying in ${delay}s (attempt ${attempt + 1} of 3)`);
+            attempt++;
+            await new Promise(r => setTimeout(r, delay * 1000 + 250));
+            continue;
+          }
+          break;
+        }
+        if (response.status === 429) { console.error('[oauth] token exchange still rate limited after retries'); throw new HttpError(429, 'Discord is rate limiting sign-ins right now. Wait a minute and try again.'); }
         if (!response.ok) { const detail = await response.json().then(b => b?.error, () => undefined); console.error(`[oauth] token exchange failed: status ${response.status}${typeof detail === 'string' ? ` error ${detail.slice(0, 64)}` : ''}`); throw new HttpError(401, 'Discord sign-in failed. Start again.'); }
         const token = await response.json();
         if (!token.access_token || !Number.isFinite(token.expires_in) || token.expires_in <= 0) throw new HttpError(502, 'Invalid Discord token response.');
