@@ -66,6 +66,32 @@ test('OAuth state is random, HttpOnly, and validated; secret is not exposed', as
   const session = await fetch(`${url}/api/session`);
   assert.ok(!(await session.text()).includes('private-'));
 });
+test('OAuth token rate limits use capped or fallback retry delays', async t => {
+  const retryValues = [11, 0.5, -1, 'invalid'];
+  const expectedDelays = [10250, 750, 2250, 2250];
+  const delays = [];
+  const originalSetTimeout = globalThis.setTimeout;
+  t.mock.method(globalThis, 'setTimeout', (callback, delay, ...args) => {
+    if (expectedDelays.includes(delay)) {
+      delays.push(delay);
+      return originalSetTimeout(callback, 0, ...args);
+    }
+    return originalSetTimeout(callback, delay, ...args);
+  });
+  let tokenAttempts = 0;
+  const { url } = await fixture(t, credentials, async input => {
+    const path = new URL(input).pathname;
+    if (path === '/api/v10/oauth2/token') {
+      if (tokenAttempts++ % 2 === 0) return json({ retry_after: retryValues.shift() }, 429);
+      return json({ access_token: 'fixture-token', expires_in: 3600 });
+    }
+    if (path === '/api/v10/users/@me') return json({ id: 'fixture-user', username: 'Tester' });
+    throw new Error('Unexpected Discord request.');
+  });
+  for (let i = 0; i < expectedDelays.length; i++) await signIn(url);
+  assert.equal(tokenAttempts, 8);
+  assert.deepEqual(delays, expectedDelays);
+});
 test('production requires HTTPS and a strong session secret', () => {
   assert.throws(() => createApp({ env: { NODE_ENV: 'production' }, dbPath: ':memory:' }), /HTTPS/);
   assert.throws(() => createApp({ env: { NODE_ENV: 'production', APP_ORIGIN: 'https://example.com' }, dbPath: ':memory:' }), /SESSION_SECRET/);
