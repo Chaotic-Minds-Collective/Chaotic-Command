@@ -49,7 +49,7 @@ export function createApp(config = {}) {
   const deleteSession = sid => db.prepare('DELETE FROM sessions WHERE id = ?').run(sessionKey(sid));
   const cookie = (sid, age = 28800) => `cc_session=${sid}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${age}${secure ? '; Secure' : ''}`;
   const ensureConfigured = () => { if (!configured) throw new HttpError(503, 'Configure Discord credentials and SESSION_SECRET on the server, then restart.'); };
-  const json = (res, status, body) => { res.writeHead(status, { 'Content-Type': type }); };
+  const json = (res, status, body) => { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(body)); };
   /** Call Discord with bounded retries for rate limits and translate upstream failures. */
   async function discord(path, token, options = {}, attempt = 0) {
     const allowedPath = /^\/(?:users\/@me(?:\/guilds\?limit=200(?:&after=\d{17,20})?)?|guilds\/\d{17,20}\/(?:roles|channels|members\/\d{17,20}))$/;
