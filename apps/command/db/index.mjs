@@ -65,6 +65,12 @@ CREATE INDEX IF NOT EXISTS user_bots_owner ON user_bots(owner_id, created_at);
 CREATE TABLE IF NOT EXISTS guild_bot_selections (owner_id TEXT NOT NULL, guild_id TEXT NOT NULL, bot_id TEXT NOT NULL, PRIMARY KEY(owner_id, guild_id));`
 };
 
+/**
+ * Wrap an open DatabaseSync connection with the shared asynchronous database API.
+ * Migrations enable WAL and acquire a write transaction with busy retries; schema
+ * creation and migration records commit together or roll back on failure.
+ * Closing the adapter closes the supplied connection.
+ */
 function sqliteAdapter(db, filename) {
   const self = {
     kind: 'sqlite',
@@ -100,6 +106,13 @@ function sqliteAdapter(db, filename) {
   return self;
 }
 
+/**
+ * Create a five-connection PostgreSQL pool and expose the shared database API.
+ * Remote hosts default to verified TLS unless URL SSL options override it; ca
+ * augments enabled TLS. Queries translate supported SQLite syntax and placeholders.
+ * Migrations use one checked-out client and an advisory transaction lock, releasing
+ * the client after commit or rollback. Closing the adapter ends the pool.
+ */
 async function postgresAdapter(connectionString, ca) {
   const pgModule = await import('pg');
   const Pool = pgModule.default.Pool ?? pgModule.default;
@@ -153,6 +166,11 @@ async function postgresAdapter(connectionString, ca) {
   return self;
 }
 
+/**
+ * Run a synchronous SQLite operation, retrying SQLITE_BUSY with asynchronous
+ * ten-millisecond waits for up to five seconds. Return its result on success;
+ * propagate other errors immediately and the last busy error on timeout.
+ */
 async function sqliteRetry(operation) {
   const deadline = Date.now() + 5000;
   for (;;) {
@@ -208,6 +226,12 @@ export async function openDb({ env = process.env, dbPath } = {}) {
   }
 }
 
+/**
+ * Open SQLite at dbPath or command.sqlite under env.DATA_DIR (default .data).
+ * Create parent directories with mode 0700 unless using ':memory:'. Disable the
+ * driver's blocking busy timeout so migration lock retries can yield to callers.
+ * Filesystem and connection errors reject the returned promise.
+ */
 async function sqliteAdapterFor(dbPath, env) {
   const path = dbPath ?? resolve(env.DATA_DIR || '.data', 'command.sqlite');
   if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
