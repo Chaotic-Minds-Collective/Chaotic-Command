@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 const initialUrl = 'wss://gateway.discord.gg/?v=10&encoding=json';
-const resumeUrl = 'wss://resume.example.test/?v=10&encoding=json';
+const resumeUrl = initialUrl;
 let fixtureId = 0;
 
 async function fixture(t) {
@@ -68,7 +68,7 @@ async function fixture(t) {
   assert.equal(first.url, initialUrl);
   first.message({ op: 10, d: { heartbeat_interval: 45000 } });
   assert.equal(first.sent[0].op, 2);
-  first.message({ op: 0, t: 'READY', s: 42, d: { session_id: 'session', resume_gateway_url: 'wss://resume.example.test' } });
+  first.message({ op: 0, t: 'READY', s: 42, d: { session_id: 'session', resume_gateway_url: 'wss://gateway.discord.gg' } });
 
   return {
     first,
