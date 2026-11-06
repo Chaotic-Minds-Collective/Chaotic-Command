@@ -1,5 +1,6 @@
 const $ = id => document.getElementById(id);
 let csrf, selected = '', plan, busy = false;
+/** Send a JSON request to the API and return the parsed body; throw the server's error message on failure. */
 async function api(path, body) {
   const response = await fetch(path, { credentials: 'same-origin', ...(body === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(body) }) });
   const data = await response.json();
@@ -9,29 +10,33 @@ async function api(path, body) {
   }
   return data;
 }
+/** Show a status message in the page banner. */
 function message(text) { $('message').textContent = text; }
 /** Return the string value with HTML metacharacters escaped for text or quoted attributes. */
 function esc(text) { return String(text).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 /** Discard the pending plan, hide its preview, and clear the confirmation and apply results. */
 function clearPlan() { plan = null; $('plan').hidden = true; $('confirmation').value = ''; $('result').innerHTML = ''; }
-/** Hide the audit report and remove its contents. */
 let sessionUser = null, lastAuditSummary = '';
+/** Hide the audit report and remove its contents. */
 function clearAudit() {
   $('audit-report').hidden = true;
   $('audit-report').innerHTML = '';
   lastAuditSummary = '';
 }
 const TAB_IDS = ['dashboard', 'bot-management', 'server-picker', 'audit-panel', 'template-setup', 'saved-structure-panel', 'server-notes', 'monetization', 'staff-panel'];
-/** Show only the requested workspace panel and mark its tab as selected. */
-function activateTab(name) {
+/** Show only the requested workspace panel and mark its tab as selected, without rendering. */
+function initTabs(name) {
   for (const id of TAB_IDS) { const panel = $(id); if (panel) panel.hidden = id !== name; }
-  document.querySelectorAll('.section-tabs [data-tab]').forEach(button => {
-    const on = button.getAttribute('data-tab') === name;
-    button.setAttribute('aria-selected', on ? 'true' : 'false');
-    button.tabIndex = on ? 0 : -1;
+  document.querySelectorAll('.section-tabs [role="tab"]').forEach(button => {
+    button.setAttribute('aria-selected', button.getAttribute('data-tab') === name ? 'true' : 'false');
   });
+}
+/** Show only the requested workspace panel, mark its tab, and refresh the dashboard when opened. */
+function activateTab(name) {
+  initTabs(name);
   if (name === 'dashboard') renderDashboard();
 }
+/** Return one overview card's HTML with every value escaped. */
 function dashCard(title, value, note) {
   return `<div class="dash-card"><h3>${esc(title)}</h3><p class="dash-value">${esc(value)}</p>${note ? `<p class="dash-note">${esc(note)}</p>` : ''}</div>`;
 }
@@ -40,23 +45,43 @@ async function renderDashboard() {
   const grid = $('dashboard-cards');
   if (!sessionUser) { grid.innerHTML = '<p class="report-empty">Sign in to see your command overview.</p>'; $('dashboard-quick').innerHTML = ''; return; }
   grid.innerHTML = '<p class="report-empty">Loading overview\u2026</p>';
-  let bots = [];
-  try { const data = await api('/api/bots'); bots = [...data.bots]; if (data.sharedBot) bots.unshift(data.sharedBot); } catch { bots = []; }
-  const defaultBot = bots.find(bot => bot.id === $('active-bot').value);
-  let guilds = [];
-  try { guilds = (await api('/api/guilds')).guilds; } catch { guilds = []; }
+  let bots = [], botsFailed = false, selectedBotId = null;
+  try {
+    const data = await api('/api/bots');
+    bots = [...data.bots]; if (data.sharedBot) bots.unshift(data.sharedBot);
+    selectedBotId = typeof data.selectedBotId === 'string' ? data.selectedBotId : null;
+  } catch { botsFailed = true; }
+  const defaultBot = selectedBotId ? bots.find(bot => bot.id === selectedBotId) : null;
+  let guilds = [], guildsFailed = false;
+  try { guilds = (await api('/api/guilds')).guilds; } catch { guildsFailed = true; }
   let serverLine = 'No server selected', serverNote = 'Pick one on the Servers tab.';
   if (selected) {
     try {
       const status = await api(`/api/guilds/${selected}/status`);
       serverLine = `${status.channels} channels \u00b7 ${status.roles} roles`;
       serverNote = 'Bot installed and ready on this server.';
-    } catch { serverLine = 'Bot not installed'; serverNote = 'Use the Servers tab install link, then reselect this server.'; }
+    } catch (error) {
+      // Only claim the bot is missing when the server says so; other failures stay honest.
+      if (/denied access|membership/.test(error.message)) {
+        serverLine = 'Bot not installed';
+        serverNote = 'Use the Servers tab install link, then reselect this server.';
+      } else if (/Connect your own Discord bot/.test(error.message)) {
+        serverLine = 'No bot assigned';
+        serverNote = 'Connect or select a bot on the Bots tab, then reselect this server.';
+      } else {
+        serverLine = 'Status unavailable';
+        serverNote = error.message;
+      }
+    }
   }
   const cards = [
     dashCard('Signed in', sessionUser.username, 'Discord account connected'),
-    dashCard('Connected bots', String(bots.length), defaultBot ? `Default: ${defaultBot.username}` : 'No default bot chosen yet'),
-    dashCard('Manageable servers', String(guilds.length), selected ? 'Status of the selected server below' : 'Select one on the Servers tab'),
+    botsFailed
+      ? dashCard('Connected bots', 'Unavailable', 'Could not load bots. Try reopening this tab.')
+      : dashCard('Connected bots', String(bots.length), defaultBot ? `Default: ${defaultBot.username}` : 'No default bot chosen yet'),
+    guildsFailed
+      ? dashCard('Manageable servers', 'Unavailable', 'Could not load servers. Try reopening this tab.')
+      : dashCard('Manageable servers', String(guilds.length), selected ? 'Status of the selected server below' : 'Select one on the Servers tab'),
     dashCard(selected ? 'Selected server' : 'Server status', serverLine, serverNote)
   ];
   if (lastAuditSummary) cards.push(dashCard('Last audit', lastAuditSummary, 'Re-run any time on the Audit tab.'));
@@ -80,19 +105,35 @@ function renderMonetization() {
 document.querySelectorAll('.section-tabs [data-tab]').forEach(button => {
   button.addEventListener('click', () => activateTab(button.getAttribute('data-tab')));
 });
+/** Move focus to a tab button and activate it (arrow-key navigation for keyboard users). */
+function focusTab(button) { button.focus(); activateTab(button.getAttribute('data-tab')); }
+document.querySelector('.section-tabs').addEventListener('keydown', event => {
+  if (!event.target.matches('[role="tab"]')) return;
+  const tabs = [...document.querySelectorAll('.section-tabs [role="tab"]')];
+  const at = tabs.indexOf(event.target);
+  if (event.key === 'ArrowRight' && at < tabs.length - 1) { event.preventDefault(); focusTab(tabs[at + 1]); }
+  if (event.key === 'ArrowLeft' && at > 0) { event.preventDefault(); focusTab(tabs[at - 1]); }
+  if (event.key === 'Home') { event.preventDefault(); focusTab(tabs[0]); }
+  if (event.key === 'End') { event.preventDefault(); focusTab(tabs[tabs.length - 1]); }
+});
+/** Enable or disable every form control on the page. */
 function controls(disabled) { document.querySelectorAll('button, select, input, textarea').forEach(el => { el.disabled = disabled; }); }
+/** Run an action under the busy guard, showing progress and surfacing errors as messages. */
 async function run(action) {
   if (busy) return;
   busy = true; controls(true); message('Working…');
   try { await action(); } catch (error) { message(error.message); }
   finally { busy = false; controls(false); }
 }
+/** Replace a select's contents with the given items and an optional placeholder. */
 function options(el, items, placeholder) {
   el.replaceChildren();
   if (placeholder) el.add(new Option(placeholder, ''));
   items.forEach(item => el.add(new Option(item.name || item.username, item.id)));
 }
+/** Return the selected guild ID, throwing when no server is selected. */
 function requireGuild() { if (!selected) throw new Error('Choose a server first.'); }
+/** Build the editor's structure object from the custom roles and category fields. */
 function customStructure() {
   const roles = $('custom-roles').value.split('\n').map(value => value.trim()).filter(Boolean);
   const categories = $('custom-categories').value.split('\n').map(line => line.trim()).filter(Boolean).map((line, index) => {
@@ -104,6 +145,7 @@ function customStructure() {
   if (!categories.length) throw new Error('Add at least one category using the Category | channel-one, channel-two format.');
   return { roles, categories };
 }
+/** Return a safe bot invite URL for a guild ID and base, or null when either is invalid. */
 function safeInviteHref(base, guildId) {
   if (!/^\d{17,20}$/.test(String(guildId))) return null;
   let url;
@@ -113,11 +155,13 @@ function safeInviteHref(base, guildId) {
   url.searchParams.set('disable_guild_select', 'true');
   return url.href;
 }
+/** Point the invite link at the selected server, hiding it when there is none. */
 function updateInviteLink() {
   const href = selected && window.commandInviteBase ? safeInviteHref(window.commandInviteBase, selected) : null;
   if (href) $('invite').href = href;
   else $('invite').removeAttribute('href');
 }
+/** Load connected bots from the API and refresh the bot selector and list. */
 async function refreshBots() {
   const data = await api('/api/bots');
   const items = [...data.bots];
@@ -132,6 +176,7 @@ async function refreshBots() {
     : 'No bot selected. Connect your own bot to continue.';
   $('remove-bot').disabled = !data.bots.some(bot => bot.id === data.selectedBotId);
 }
+/** Connect a personal bot from the token field, then refresh the bot list. */
 async function connectBot() {
   const token = $('bot-token').value;
   if (!token.trim()) throw new Error('Paste your Discord bot token first.');
@@ -147,6 +192,7 @@ async function connectBot() {
   $('bot-status').textContent = `Connected and selected ${result.bot.username} as your default bot. Assign it to a server with the selector below.`;
   message('Your Discord bot was verified and connected. The token is not displayed or returned.');
 }
+/** Set the default bot and reload the selected server against it. */
 async function selectBot() {
   const id = $('active-bot').value;
   if (!id) throw new Error('Choose a connected bot first.');
@@ -161,6 +207,7 @@ async function selectBot() {
   }
   message(selected ? 'Bot assignment saved for this server.' : 'Default bot updated.');
 }
+/** Remove the selected personal bot after confirmation. */
 async function removeBot() {
   const id = $('active-bot').value;
   if (!id || id === 'shared') throw new Error('Choose one of your personal bots to remove.');
@@ -169,12 +216,14 @@ async function removeBot() {
   await refreshBots();
   message('Stored bot credential removed.');
 }
+/** Load personal saved structures into the picker. */
 async function refreshSavedStructures(selectedId = '') {
   const data = await api('/api/structures');
   options($('saved-structures'), data.structures, 'Choose a saved structure');
   if (selectedId) $('saved-structures').value = selectedId;
   $('saved-structure-count').textContent = `${data.structures.length} of 20 personal structures saved.`;
 }
+/** Load the chosen saved structure into the editor. */
 async function loadSavedStructure() {
   const id = $('saved-structures').value;
   if (!id) throw new Error('Choose a saved structure first.');
@@ -189,6 +238,7 @@ async function loadSavedStructure() {
   $('saved-structure-status').textContent = `Loaded "${saved.structure.name}" into the editor. Review it and preview before applying. No Discord changes have been made.`;
   message('Personal structure loaded into the editor.');
 }
+/** Save the current editor structure under the entered name. */
 async function saveSavedStructure() {
   const name = $('saved-structure-name').value;
   const structure = customStructure();
@@ -198,6 +248,7 @@ async function saveSavedStructure() {
   $('saved-structure-status').textContent = `Saved "${saved.structure.name}" as a new personal structure.`;
   message('Personal structure saved.');
 }
+/** Rename the chosen saved structure in place. */
 async function renameSavedStructure() {
   const id = $('saved-structures').value;
   if (!id) throw new Error('Choose a saved structure to rename.');
@@ -207,6 +258,7 @@ async function renameSavedStructure() {
   $('saved-structure-status').textContent = `Renamed personal structure to "${saved.structure.name}".`;
   message('Personal structure renamed.');
 }
+/** Delete the chosen saved structure after confirmation. */
 async function deleteSavedStructure() {
   const id = $('saved-structures').value;
   if (!id) throw new Error('Choose a saved structure to delete.');
@@ -219,11 +271,13 @@ async function deleteSavedStructure() {
   $('saved-structure-status').textContent = 'Saved personal structure deleted. No Discord server was changed.';
   message('Personal structure deleted.');
 }
+/** Show or hide the custom builder depending on the chosen setup type. */
 function showCustomBuilder() {
   const custom = $('template').value === 'custom';
   $('custom-builder').hidden = !custom;
   clearPlan();
 }
+/** Build the copyable AI design prompt from the brief and the current structure. */
 function buildAiPrompt() {
   const brief = $('design-brief').value.trim();
   if (!brief) throw new Error('Describe the server you want to build or what you want to change.');
@@ -255,6 +309,7 @@ function buildAiPrompt() {
   ];
   return prompt.filter(Boolean).join('\n');
 }
+/** Parse the pasted AI JSON response into the editor with validation. */
 function importAiStructure() {
   let value;
   try { value = JSON.parse($('ai-structure-json').value); }
@@ -284,12 +339,14 @@ function importAiStructure() {
   $('ai-status').textContent = 'Imported. Review and edit the names, then preview to run server-side validation. Nothing has been sent to Discord.';
   message('AI structure imported for review. Preview it before applying.');
 }
+/** Reset workspace state and reload the manageable server list. */
 async function loadGuilds() {
   clearPlan(); clearAudit(); selected = ''; $('notes').value = ''; $('status').textContent = ''; $('invite').removeAttribute('href');
   const data = await api('/api/guilds');
   options($('guild'), data.guilds, 'Choose a server');
   message(data.guilds.length ? 'Select a server to begin.' : 'No manageable servers found. You need Manage Server permission in Discord.');
 }
+/** Select a server and load its notes and status. */
 async function loadServer() {
   clearPlan(); clearAudit(); selected = $('guild').value; $('notes').value = ''; $('status').textContent = ''; $('invite').removeAttribute('href');
   if (!selected) { message('Choose a server.'); return; }
@@ -431,6 +488,7 @@ run(async () => {
   $('signin').hidden = !session.configured;
   if (!session.user) { message('Not connected to Discord.'); return; }
   $('user').textContent = `Signed in as ${session.user.username}`;
+  initTabs('dashboard');
   options($('template'), (await api('/api/templates')).templates);
   await refreshSavedStructures();
   await refreshBots();
