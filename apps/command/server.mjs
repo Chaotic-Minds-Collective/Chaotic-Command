@@ -51,9 +51,13 @@ export function createApp(config = {}) {
   const json = (res, status, body) => { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(body)); };
   /** Call Discord with bounded retries for rate limits and translate upstream failures. */
   async function discord(path, token, options = {}, attempt = 0) {
+    const allowedPath = /^\/(?:users\/@me(?:\/guilds\?limit=200(?:&after=\d{17,20})?)?|guilds\/\d{17,20}\/(?:roles|channels|members\/\d{17,20}))$/;
+    if (typeof path !== 'string' || !allowedPath.test(path)) throw new HttpError(400, 'Invalid Discord API path.');
+    const requestUrl = new URL(`https://discord.com/api/v10${path}`);
+    if (requestUrl.origin !== 'https://discord.com' || !requestUrl.pathname.startsWith('/api/v10/')) throw new HttpError(400, 'Invalid Discord API destination.');
     let response;
     try {
-      response = await fetcher(`https://discord.com/api/v10${path}`, { ...options, signal: AbortSignal.timeout(15000), headers: { Authorization: token, ...(options.body ? { 'Content-Type': 'application/json' } : {}), 'User-Agent': 'ChaoticCommand/1.0 (+https://command.chaoticmindsgaming.com)', ...options.headers } });
+      response = await fetcher(requestUrl.href, { ...options, signal: AbortSignal.timeout(15000), headers: { Authorization: token, ...(options.body ? { 'Content-Type': 'application/json' } : {}), 'User-Agent': 'ChaoticCommand/1.0 (+https://command.chaoticmindsgaming.com)', ...options.headers } });
     } catch { throw new HttpError(502, 'Discord could not be reached. Try again.'); }
     if (response.status === 429 && attempt < 3) {
       const data = await response.json().catch(() => ({}));
