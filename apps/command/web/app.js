@@ -241,7 +241,7 @@ $('audit').onclick = () => run(async () => {
   const rolesHtml = audit.roles.map(role => `<li><b>${esc(role.name)}</b>${role.elevatedPermissions ? ' <span class="badge badge-warn">REVIEW</span>' : ''}${role.managed ? ' <span class="badge badge-quiet">managed</span>' : ''}<span class="perm-list">${role.permissionFlags.length ? esc(role.permissionFlags.join(', ')) : 'No recognized permissions'}</span></li>`).join('');
   const catsHtml = audit.categories.map(category => `<li><b>${esc(category.name)}</b>${category.channels.length ? `<ul>${category.channels.map(channel => `<li>${esc(channel.name)} <span class="badge badge-quiet">${esc(channel.type)}</span>${channel.permissionOverwriteCount ? ` <span class="badge badge-quiet">${channel.permissionOverwriteCount} overwrites</span>` : ''}</li>`).join('')}</ul>` : ' <span class="badge badge-quiet">No channels</span>'}</li>`).join('');
   const uncatHtml = audit.uncategorizedChannels.length
-    ? `<ul>${audit.uncategorizedChannels.map(channel => `<li>${esc(channel.name)} <span class="badge badge-quiet">${esc(channel.type)}</span></li>`).join('')}</ul>`
+    ? `<ul>${audit.uncategorizedChannels.map(channel => `<li>${esc(channel.name)} <span class="badge badge-quiet">${esc(channel.type)}</span>${channel.permissionOverwriteCount ? ` <span class="badge badge-quiet">${channel.permissionOverwriteCount} overwrites</span>` : ''}</li>`).join('')}</ul>`
     : '<p class="report-empty">None detected.</p>';
   $('audit-report').innerHTML = `
     <p class="audit-summary">${audit.summary.roleCount} roles · ${audit.summary.categoryCount} categories · ${audit.summary.channelCount} channels (${audit.summary.textChannelCount} text, ${audit.summary.voiceChannelCount} voice)</p>
