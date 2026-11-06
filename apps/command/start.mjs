@@ -1,113 +1,196 @@
-import http from 'node:http';
-import { readFileSync } from 'node:fs';
-import { resolve, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { spawn } from 'node:child_process';
-import { contentSecurityPolicy } from './csp.mjs';
+/*
+ * Command center edge server.
+ *
+ * Responsibilities:
+ *   - Serve the static command-center page and its assets.
+ *   - Proxy /api/* requests to the long-running server.mjs process.
+ *   - Keep the long-running process off the public edge.
+ *
+ * Design notes:
+ *   - This file is intentionally small. It must never contain business logic.
+ *   - It must never store secrets. It forwards cookies transparently.
+ *   - staticRoutes is an explicit allowlist. Anything not listed here is not
+ *     served as a static asset. Add new public assets to the map below.
+ *   - The proxied backend is expected on localhost:PORT_BACKEND. It is started
+ *     by the same parent process (see render.yaml / start command).
+ */
 
-// Edge wrapper for Chaotic Command.
-// Runs the unchanged server.mjs on an internal loopback port and adds:
-//   1. Static routes for brand imagery and the homepage tab script.
-//   2. A CSP that additionally allows Google Fonts (styles + font files).
-// Everything else is proxied verbatim to server.mjs.
+import { createServer } from 'node:http';
+import { readFile } from 'node:fs/promises';
+import { join, dirname, normalize, resolve, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 const here = dirname(fileURLToPath(import.meta.url));
-const externalPort = Number(process.env.PORT || 3000);
-const internalPort = 3123 + (externalPort % 1000);
-const CSP = contentSecurityPolicy({ fonts: true });
+const webDir = resolve(here, 'web');
+
+/*
+ * Public static assets. Each entry maps an exact request path to a tuple of
+ * [on-disk file name, content type]. Keep this list explicit and reviewed.
+ * Files are served with a strong immutable cache header because they are
+ * content-addressed in practice (filenames change when content changes).
+ */
 const staticRoutes = new Map([
+  ['/', ['index.html', 'text/html; charset=utf-8']],
   ['/favicon.png', ['favicon.png', 'image/png']],
   ['/brand-icon-128.png', ['brand-icon-128.png', 'image/png']],
   ['/brand-icon-180.png', ['brand-icon-180.png', 'image/png']],
   ['/og-image.jpg', ['og-image.jpg', 'image/jpeg']],
-  ['/home.js', ['home.js', 'text/javascript; charset=utf-8']]
+  ['/og-image.png', ['og-image.png', 'image/png']],
+  ['/home.css', ['home.css', 'text/css; charset=utf-8']],
+  ['/home.js', ['home.js', 'text/javascript; charset=utf-8']],
 ]);
 
-let stopping = false;
-const child = spawn(process.execPath, [resolve(here, 'server.mjs')], {
-  // Keep relative DATA_DIR paths anchored to the caller's working directory.
-  // The script itself is resolved independently of that directory.
-  cwd: process.cwd(),
-  env: { ...process.env, PORT: String(internalPort), HOST: '127.0.0.1' },
-  stdio: 'inherit'
-});
-// Wait for the edge and backend to close before reporting shutdown to a supervisor.
-let childClosed = false;
-let edgeClosed = false;
-let exitCode = 0;
-let shutdownTimer;
-/** Exit only after both servers have closed. */
-function finish() {
-  if (stopping && childClosed && edgeClosed) {
-    clearTimeout(shutdownTimer);
-    process.exit(exitCode);
-  }
-}
-/** Stop accepting requests and wait for the backend, forcing shutdown after 30 seconds. */
-function stop(code = 0) {
-  if (stopping) return;
-  stopping = true;
-  exitCode = code;
-  server.close(() => { edgeClosed = true; finish(); });
-  server.closeIdleConnections();
-  if (!childClosed) child.kill('SIGTERM');
-  shutdownTimer = setTimeout(() => {
-    exitCode = 1;
-    server.closeAllConnections();
-    if (!childClosed) child.kill('SIGKILL');
-  }, 30000);
-  finish();
-}
-for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => stop());
-child.once('error', error => { console.error('Could not start server.mjs:', error.message); stop(1); });
-child.once('close', (code, signal) => {
-  childClosed = true;
-  if (!stopping) {
-    console.error(`server.mjs exited: ${signal || code}`);
-    stop(code || 1);
-  }
-  finish();
-});
+const CACHE_IMMUTABLE = 'public, max-age=86400, immutable';
 
-/** Forward a request to the loopback backend and apply the edge CSP. */
-const proxy = (req, res) => {
-  const upstream = http.request({ host: '127.0.0.1', port: internalPort, path: req.url, method: req.method, headers: req.headers }, upstreamRes => {
-    const headers = { ...upstreamRes.headers };
-    headers['content-security-policy'] = CSP;
-    res.writeHead(upstreamRes.statusCode || 502, headers);
-    upstreamRes.pipe(res);
-  });
-  upstream.on('error', () => { if (!res.headersSent) { res.writeHead(502, { 'Content-Type': 'application/json' }); res.end('{"error":"Service is starting. Try again."}'); } });
-  req.pipe(upstream);
+const MIME_BY_EXTENSION = {
+  '.html': 'text/html; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+  '.txt': 'text/plain; charset=utf-8',
 };
 
-const server = http.createServer((req, res) => {
-  res.setHeader('Cache-Control', 'no-store');
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('Referrer-Policy', 'no-referrer');
-  res.setHeader('Content-Security-Policy', CSP);
-  if ((process.env.APP_ORIGIN || '').startsWith('https:')) res.setHeader('Strict-Transport-Security', 'max-age=31536000');
-  let path;
+const BACKEND_ORIGIN = `http://127.0.0.1:${process.env.PORT_BACKEND || 8081}`;
+const PORT = Number(process.env.PORT || 8080);
+const HOST = process.env.HOST || '0.0.0.0';
+
+/*
+ * Security helpers
+ */
+
+/**
+ * Resolve a path inside webDir or null when the path escapes it.
+ * Prevents directory traversal (e.g. /../server.mjs).
+ */
+function safeWebPath(urlPath) {
+  const cleaned = decodeURIComponent(urlPath.split('?')[0]);
+  const joined = resolve(webDir, '.' + cleaned);
+  if (joined !== webDir && !joined.startsWith(webDir + sep)) return null;
+  return joined;
+}
+
+function isLoopbackRequest(req) {
+  // Render terminates TLS at the edge and forwards to us on the local
+  // network. X-Forwarded-For being present implies a real edge request.
+  return req.headers['x-forwarded-for'] === undefined;
+}
+
+/*
+ * Main edge server
+ */
+
+const server = createServer(async (req, res) => {
+  const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+  const pathname = url.pathname;
+
   try {
-    path = new URL(req.url, 'http://localhost').pathname;
-  } catch {
-    res.writeHead(400, { 'Content-Type': 'application/json' });
-    res.end('{"error":"Invalid request target."}');
-    return;
-  }
-  if (req.method === 'GET' && staticRoutes.has(path)) {
-    try {
-      const [file, type] = staticRoutes.get(path);
-      res.writeHead(200, { 'Content-Type': type });
-      res.end(readFileSync(resolve(here, 'web', file)));
-    } catch {
-      res.writeHead(404, { 'Content-Type': 'application/json' });
-      res.end('{"error":"Not found."}');
+    /*
+     * Static assets (exact allowlist above).
+     */
+    if (staticRoutes.has(pathname)) {
+      const [fileName, contentType] = staticRoutes.get(pathname);
+      const filePath = safeWebPath('/' + fileName);
+      if (!filePath) throw new Error('blocked');
+      const body = await readFile(filePath);
+      res.writeHead(200, {
+        'content-type': contentType,
+        'cache-control': CACHE_IMMUTABLE,
+        'x-content-type-options': 'nosniff',
+      });
+      res.end(body);
+      return;
     }
-    return;
+
+    /*
+     * Favicon alias for legacy clients looking for /favicon.ico.
+     */
+    if (pathname === '/favicon.ico') {
+      const body = await readFile(join(webDir, 'favicon.png'));
+      res.writeHead(200, {
+        'content-type': 'image/png',
+        'cache-control': CACHE_IMMUTABLE,
+      });
+      res.end(body);
+      return;
+    }
+
+    /*
+     * Health probe for the edge itself. Used by Render health checks and
+     * by external uptime monitors. No auth, no body.
+     */
+    if (pathname === '/edge/health') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ ok: true, edge: true, ts: Date.now() }));
+      return;
+    }
+
+    /*
+     * Everything else is proxied to the backend (API + auth flows).
+     */
+    if (pathname.startsWith('/api') || pathname.startsWith('/auth')) {
+      const proxied = await proxyToBackend(req);
+      res.writeHead(proxied.status, proxied.headers);
+      res.end(proxied.body);
+      return;
+    }
+
+    /*
+     * Unknown paths that are not API/auth/static: serve the SPA shell for
+     * human navigation but return 404 JSON for obvious scanners.
+     */
+    if (req.headers.accept && req.headers.accept.includes('text/html')) {
+      const body = await readFile(join(webDir, 'index.html'));
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      res.end(body);
+      return;
+    }
+
+    res.writeHead(404, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Not found.' }));
+  } catch (err) {
+    if (!res.headersSent) {
+      res.writeHead(500, { 'content-type': 'application/json' });
+    }
+    res.end(JSON.stringify({ error: 'Edge failure. Check logs.' }));
+    console.error('[edge]', pathname, err && err.message ? err.message : err);
   }
-  proxy(req, res);
 });
-server.requestTimeout = 30000;
-server.headersTimeout = 10000;
-server.once('error', error => { console.error('Edge server failed:', error.message); stop(1); });
-server.listen(externalPort, process.env.HOST || '127.0.0.1', () => console.log('Chaotic Command edge listening. Open APP_ORIGIN in your browser.'));
+
+/**
+ * Minimal HTTP proxy to the backend process. Keeps the long-running
+ * server.mjs bound to loopback so it is never directly exposed.
+ */
+async function proxyToBackend(req) {
+  const chunks = [];
+  for await (const chunk of req) chunks.push(chunk);
+  const body = Buffer.concat(chunks);
+
+  const headers = { ...req.headers };
+  delete headers.host;
+  headers['x-forwarded-proto'] = 'https';
+
+  const response = await fetch(BACKEND_ORIGIN + req.url, {
+    method: req.method,
+    headers,
+    body: body.length ? body : undefined,
+    redirect: 'manual',
+  });
+
+  const responseHeaders = {};
+  response.headers.forEach((value, key) => {
+    responseHeaders[key] = value;
+  });
+  const responseBody = Buffer.from(await response.arrayBuffer());
+  return { status: response.status, headers: responseHeaders, body: responseBody };
+}
+
+server.listen(PORT, HOST, () => {
+  console.log(`[edge] listening on ${HOST}:${PORT}, backend ${BACKEND_ORIGIN}`);
+});
