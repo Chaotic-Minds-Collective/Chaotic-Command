@@ -50,6 +50,14 @@ export function createApp(config = {}) {
   const deleteSession = sid => db.prepare('DELETE FROM sessions WHERE id = ?').run(sessionKey(sid));
   const cookie = (sid, age = 28800) => `cc_session=${sid}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${age}${secure ? '; Secure' : ''}`;
   const ensureConfigured = () => { if (!configured) throw new HttpError(503, 'Configure Discord credentials and SESSION_SECRET on the server, then restart.'); };
+  /** Resolve the OAuth token endpoint: the configured relay when present, else Discord directly. */
+  const tokenTarget = () => {
+    if (env.DISCORD_TOKEN_PROXY) {
+      try { const proxy = new URL(env.DISCORD_TOKEN_PROXY); if (proxy.protocol === 'https:') return { url: proxy.href, auth: env.DISCORD_TOKEN_PROXY_KEY }; }
+      catch { console.error('[oauth] DISCORD_TOKEN_PROXY must be a valid https URL; using direct Discord endpoint'); }
+    }
+    return { url: 'https://discord.com/api/v10/oauth2/token', auth: null };
+  };
   const json = (res, status, body) => { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(body)); };
   /** Call Discord with bounded retries for rate limits and translate upstream failures. */
   async function discord(path, token, options = {}, attempt = 0) {
@@ -173,7 +181,8 @@ export function createApp(config = {}) {
       persist();
       const refresh = (async () => {
         try {
-          const response = await fetcher('https://discord.com/api/v10/oauth2/token', { method: 'POST', signal: AbortSignal.timeout(15000), headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'ChaoticCommand/1.0 (+https://command.chaoticmindsgaming.com)' }, body: new URLSearchParams({ client_id: env.DISCORD_CLIENT_ID, client_secret: env.DISCORD_CLIENT_SECRET, grant_type: 'refresh_token', refresh_token: attemptedRefresh }) });
+          const target = tokenTarget();
+          const response = await fetcher(target.url, { method: 'POST', signal: AbortSignal.timeout(15000), headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'ChaoticCommand/1.0 (+https://command.chaoticmindsgaming.com)', ...(target.auth ? { Authorization: `Bearer ${target.auth}` } : {}) }, body: new URLSearchParams({ client_id: env.DISCORD_CLIENT_ID, client_secret: env.DISCORD_CLIENT_SECRET, grant_type: 'refresh_token', refresh_token: attemptedRefresh }) });
           if (!response.ok) {
             const error = await response.json().catch(() => null);
             if (response.status >= 400 && response.status < 500 && error?.error === 'invalid_grant') {
@@ -224,7 +233,7 @@ export function createApp(config = {}) {
         }
         session.oauth = { state: random(), expires: Date.now() + 10 * 60000 };
         persist();
-        res.setHeader('Set-Cookie', cookie(sid));
+        res.setHeader('Set-Cookie', cookie(sid, session?.expires ? Math.ceil(Math.max(1, (session.expires - Date.now()) / 1000)) : undefined));
         const params = new URLSearchParams({ client_id: env.DISCORD_CLIENT_ID, redirect_uri: `${origin}/auth/callback`, response_type: 'code', scope: 'identify guilds', state: session.oauth.state });
         res.writeHead(302, { Location: `https://discord.com/oauth2/authorize?${params}` }); res.end(); return;
       }
@@ -236,13 +245,8 @@ export function createApp(config = {}) {
         let response;
         let attempt = 0;
         const tokenParams = new URLSearchParams({ client_id: env.DISCORD_CLIENT_ID, client_secret: env.DISCORD_CLIENT_SECRET, grant_type: 'authorization_code', code: url.searchParams.get('code'), redirect_uri: `${origin}/auth/callback` });
-        let tokenUrl = 'https://discord.com/api/v10/oauth2/token';
-        let useProxy = false;
-        if (env.DISCORD_TOKEN_PROXY) {
-          try { const proxy = new URL(env.DISCORD_TOKEN_PROXY); if (proxy.protocol === 'https:') { tokenUrl = proxy.href; useProxy = true; } else throw new Error('not https'); }
-          catch { console.error('[oauth] DISCORD_TOKEN_PROXY must be a valid https URL; using direct Discord endpoint'); }
-        }
-        const tokenHeaders = { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'ChaoticCommand/1.0 (+https://command.chaoticmindsgaming.com)', ...(useProxy ? { Authorization: `Bearer ${env.DISCORD_TOKEN_PROXY_KEY}` } : {}) };
+        const { url: tokenUrl, auth: proxyAuth } = tokenTarget();
+        const tokenHeaders = { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'ChaoticCommand/1.0 (+https://command.chaoticmindsgaming.com)', ...(proxyAuth ? { Authorization: `Bearer ${proxyAuth}` } : {}) };
         while (true) {
           try { response = await fetcher(tokenUrl, { method: 'POST', signal: AbortSignal.timeout(15000), headers: tokenHeaders, body: tokenParams }); }
           catch { if (attempt < 3) { attempt++; await new Promise(r => setTimeout(r, attempt * 1500)); continue; } throw new HttpError(502, 'Discord sign-in could not be reached. Start again.'); }
