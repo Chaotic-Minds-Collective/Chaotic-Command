@@ -13,10 +13,10 @@ async function setup(t) {
   const app = createApp({ env, dbPath: ':memory:', fetch: async (url, options = {}) => {
     const path = new URL(url).pathname.replace('/api/v10', '');
     if (path === '/oauth2/token') return reply({ access_token: 'oauth-secret', expires_in: 3600 });
-    if (path === '/users/@me') return reply({ id: 'user-id', username: 'Tester' });
+    if (path === '/users/@me') return reply({ id: '123456789012345679', username: 'Tester' });
     if (path === '/users/@me/guilds') return reply(allowed ? [{ id: guild, name: 'Test Server', permissions: '32' }] : []);
     if (!botAllowed) return reply({}, 403);
-    if (path === `/guilds/${guild}/members/user-id`) return reply({ roles: ['bot-role'] });
+    if (path === `/guilds/${guild}/members/123456789012345679`) return reply({ roles: ['bot-role'] });
     if (options.method === 'POST') {
       const data = JSON.parse(options.body);
       assert.equal(options.headers.Authorization, 'Bot bot-secret');
