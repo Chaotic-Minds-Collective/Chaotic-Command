@@ -1,6 +1,9 @@
 name: Apply command-center restyle
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - feature/command-center-restyle
 permissions:
   contents: write
 jobs:
