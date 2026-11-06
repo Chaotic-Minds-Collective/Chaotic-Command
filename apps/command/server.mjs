@@ -12,6 +12,7 @@ const random = () => randomBytes(32).toString('hex');
 const structureNameKey = value => value.normalize('NFKC').toLowerCase();
 const equal = (a, b) => typeof a === 'string' && typeof b === 'string' && Buffer.byteLength(a) === Buffer.byteLength(b) && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 const HOUR = 3600000;
+const DAY = 24 * HOUR;
 
 /** Dependency-free single-process runtime. Inject fetch/db config for offline integration tests. */
 export function createApp(config = {}) {
@@ -48,7 +49,7 @@ export function createApp(config = {}) {
   const deleteSession = sid => db.prepare('DELETE FROM sessions WHERE id = ?').run(sessionKey(sid));
   const cookie = (sid, age = 28800) => `cc_session=${sid}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${age}${secure ? '; Secure' : ''}`;
   const ensureConfigured = () => { if (!configured) throw new HttpError(503, 'Configure Discord credentials and SESSION_SECRET on the server, then restart.'); };
-  const json = (res, status, body) => { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(body)); };
+  const json = (res, status, body) => { res.writeHead(status, { 'Content-Type': type }); };
   /** Call Discord with bounded retries for rate limits and translate upstream failures. */
   async function discord(path, token, options = {}, attempt = 0) {
     const allowedPath = /^\/(?:users\/@me(?:\/guilds\?limit=200(?:&after=\d{17,20})?)?|guilds\/\d{17,20}\/(?:roles|channels|members\/\d{17,20}))$/;
@@ -143,6 +144,22 @@ export function createApp(config = {}) {
       try { if (row) session = decrypt(row.data); } catch { deleteSession(sid); }
     }
     const persist = () => { if (sid && session) saveSession(sid, session); };
+    /** Silently renew an expiring Discord access token with the stored refresh token, sliding the session window. */
+    const ensureFreshToken = async () => {
+      if (!session?.user || !session.refresh || session.tokenExpires > Date.now() + 30 * 60000) return;
+      try {
+        const response = await fetcher('https://discord.com/api/v10/oauth2/token', { method: 'POST', signal: AbortSignal.timeout(15000), headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'ChaoticCommand/1.0 (+https://command.chaoticmindsgaming.com)' }, body: new URLSearchParams({ client_id: env.DISCORD_CLIENT_ID, client_secret: env.DISCORD_CLIENT_SECRET, grant_type: 'refresh_token', refresh_token: session.refresh }) });
+        if (!response.ok) { console.warn(`[oauth] token refresh failed: status ${response.status}`); return; }
+        const token = await response.json();
+        if (!token.access_token || !Number.isFinite(token.expires_in) || token.expires_in <= 0) { console.warn('[oauth] token refresh returned an invalid token response'); return; }
+        session.token = token.access_token;
+        session.tokenExpires = Date.now() + token.expires_in * 1000;
+        if (token.refresh_token) session.refresh = token.refresh_token;
+        session.expires = Date.now() + 30 * DAY;
+        persist();
+      } catch (error) { console.warn(`[oauth] token refresh could not be reached: ${error?.message || error}`); }
+    };
+    await ensureFreshToken();
     try {
       const url = new URL(req.url, origin), path = url.pathname;
       if (req.method === 'GET' && assets.has(path)) {
@@ -200,8 +217,8 @@ export function createApp(config = {}) {
         if (!token.access_token || !Number.isFinite(token.expires_in) || token.expires_in <= 0) throw new HttpError(502, 'Invalid Discord token response.');
         const user = await discord('/users/@me', `Bearer ${token.access_token}`);
         deleteSession(sid); sid = random();
-        session = { csrf: random(), token: token.access_token, tokenExpires: Date.now() + token.expires_in * 1000, user: { id: user.id, username: user.global_name || user.username }, expires: Date.now() + 8 * HOUR };
-        persist(); res.setHeader('Set-Cookie', cookie(sid));
+        session = { csrf: random(), token: token.access_token, refresh: token.refresh_token || null, tokenExpires: Date.now() + token.expires_in * 1000, user: { id: user.id, username: user.global_name || user.username }, expires: Date.now() + 30 * DAY };
+        persist(); res.setHeader('Set-Cookie', cookie(sid, 30 * DAY / 1000));
         res.writeHead(302, { Location: '/command' }); res.end(); return;
       }
       if (!session?.user || session.tokenExpires <= Date.now()) throw new HttpError(401, 'Sign in with Discord.');
