@@ -6,8 +6,9 @@ import { runInNewContext } from 'node:vm';
 const html = readFileSync(new URL('../web/home.html', import.meta.url), 'utf8');
 const script = readFileSync(new URL('../web/home.js', import.meta.url), 'utf8');
 
-function fixture() {
+function fixture(session) {
   let focused;
+  let replaced;
   function element(markup) {
     const attributes = Object.fromEntries([...markup.matchAll(/([\w-]+)="([^"]*)"/g)].map(m => [m[1], m[2]]));
     const listeners = {};
@@ -33,7 +34,11 @@ function fixture() {
     document: {
       querySelectorAll: selector => selector === '.nav-tab' ? tabs : jumps,
       getElementById: id => elements.find(e => e.id === id)
-    }, window: { scrollTo() {} }
+    }, window: {
+      scrollTo() {},
+      location: session ? { replace(url) { replaced = url; } } : undefined,
+      fetch: session ? async () => ({ json: async () => session }) : undefined
+    }
   });
   function selected(index) {
     tabs.forEach((tab, i) => {
@@ -42,7 +47,7 @@ function fixture() {
       assert.equal(panels[i].hidden, i !== index);
     });
   }
-  return { tabs, panels, jumps, selected, focused: () => focused };
+  return { tabs, panels, jumps, selected, replaced: () => replaced, focused: () => focused };
 }
 
 test('homepage exposes related tabs and focusable panels, excluding Documentation from the tablist', () => {
@@ -89,4 +94,16 @@ test('comparison scroll region has a name, keyboard focus, overflow, and visible
   assert.match(css, /\.compare-wrap\{overflow-x:auto/);
   assert.match(css, /\.compare-table\{[^}]*min-width:640px/);
   assert.match(css, /\[tabindex="0"\]:focus-visible\{outline:3px solid var\(--green\)/);
+});
+
+test('signed-in visitors are redirected from the homepage to the command center', async () => {
+  const { replaced: replacedRef } = fixture({ user: { id: '1', username: 'test-user' } });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(replacedRef(), '/command');
+});
+
+test('anonymous visitors stay on the homepage', async () => {
+  const { replaced: replacedRef2 } = fixture({ user: null });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(replacedRef2(), undefined);
 });

@@ -1,4 +1,10 @@
 (function () {
+  // Signed-in visitors land straight in the command center; everyone else sees the homepage.
+  if (window.fetch && window.location && window.location.replace) {
+    window.fetch('/api/session').then(function (response) { return response.json(); }).then(function (session) {
+      if (session && session.user) window.location.replace('/command');
+    }).catch(function () {});
+  }
   var tabs = Array.prototype.slice.call(document.querySelectorAll('.nav-tab'));
   if (!tabs.length) return;
   function activate(name) {
