@@ -165,7 +165,7 @@ test('sign-in bypasses a pending refresh and logout still requires CSRF', async 
   }
 });
 
-for (const concurrentAction of ['refresh', 'logout', 'sign-in']) {
+for (const concurrentAction of ['refresh', 'logout', 'sign-in', 'expiry']) {
   test(`a delayed bot connection preserves a concurrent ${concurrentAction}`, { timeout: 10000 }, async t => {
     const started = Promise.withResolvers(), delayed = Promise.withResolvers();
     const now = Date.now();
@@ -209,6 +209,8 @@ for (const concurrentAction of ['refresh', 'logout', 'sign-in']) {
         assert.equal((await fetch(`${url}/api/session`, { headers })).status, 200);
       } else if (concurrentAction === 'logout') {
         assert.equal((await fetch(`${url}/api/logout`, { method: 'POST', headers: { ...headers, Origin: 'http://localhost:3000', 'x-csrf-token': csrf } })).status, 200);
+      } else if (concurrentAction === 'expiry') {
+        t.mock.method(Date, 'now', () => now + 30 * 86400000 + 60000);
       } else {
         assert.equal((await login(headers)).status, 302);
       }
@@ -224,6 +226,15 @@ for (const concurrentAction of ['refresh', 'logout', 'sign-in']) {
       assert.ok((await (await fetch(`${url}/api/session`, { headers })).json()).user, 'the renewed stored expiry survives the bot write');
     } else {
       assert.equal((await (await fetch(`${url}/api/session`, { headers })).json()).user, null);
+      const newLogin = await login();
+      assert.equal(newLogin.status, 302);
+      const newHeaders = { Cookie: newLogin.headers.get('set-cookie').split(';')[0] };
+      const bots = await fetch(`${url}/api/bots`, { headers: newHeaders });
+      assert.equal(bots.status, 200);
+      assert.deepEqual((await bots.json()).bots, [], 'a failed connection must not leave a stored bot');
+      const newCsrf = (await (await fetch(`${url}/api/session`, { headers: newHeaders })).json()).csrf;
+      const retry = await fetch(`${url}/api/bots`, { method: 'POST', headers: { ...newHeaders, Origin: 'http://localhost:3000', 'x-csrf-token': newCsrf }, body: JSON.stringify({ token: 'synthetic-bot-token-long-enough' }) });
+      assert.equal(retry.status, 201, 'the same bot can be connected after signing in again');
     }
   });
 }

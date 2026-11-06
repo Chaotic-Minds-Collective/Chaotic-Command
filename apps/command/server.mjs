@@ -292,13 +292,17 @@ export function createApp(config = {}) {
         const count = db.prepare('SELECT COUNT(*) AS count FROM user_bots WHERE owner_id = ?').get(session.user.id).count;
         if (count >= 5) throw new HttpError(409, 'You can connect up to five personal bots.');
         const id = randomBytes(16).toString('hex'), now = Date.now();
+        // Keep the credential and session selection atomic if the session was invalidated.
+        db.exec('BEGIN IMMEDIATE');
         try {
           db.prepare('INSERT INTO user_bots (id, owner_id, discord_bot_id, username, token_encrypted, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(id, session.user.id, identity.id, identity.username, encrypt(token), now);
+          persistChanges({ selectedBotId: id });
+          db.exec('COMMIT');
         } catch (error) {
+          db.exec('ROLLBACK');
           if (String(error).includes('UNIQUE')) throw new HttpError(409, 'That Discord bot is already connected to your account.');
           throw error;
         }
-        persistChanges({ selectedBotId: id });
         return json(res, 201, { bot: { id, discordBotId: identity.id, username: identity.username, createdAt: now }, selectedBotId: id });
       }
       if (path === '/api/bots/select' && req.method === 'POST') {
