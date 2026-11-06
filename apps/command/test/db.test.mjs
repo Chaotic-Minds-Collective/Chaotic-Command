@@ -9,6 +9,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { openDb } from '../db/index.mjs';
 
+/** Creates an isolated temp directory for a test and cleans it up afterwards. */
 async function fixture(t) {
   const dir = await mkdtemp(join(tmpdir(), 'command-db-'));
   t.after(() => rm(dir, { recursive: true, force: true }));

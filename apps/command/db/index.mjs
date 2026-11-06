@@ -66,10 +66,13 @@ CREATE TABLE IF NOT EXISTS guild_bot_selections (owner_id TEXT NOT NULL, guild_i
 };
 
 /**
- * Wrap an open DatabaseSync connection with the shared asynchronous database API.
- * Migrations enable WAL and acquire a write transaction with busy retries; schema
- * creation and migration records commit together or roll back on failure.
- * Closing the adapter closes the supplied connection.
+ * Build the SQLite adapter around an open node:sqlite handle. Migrations run
+ * inside a BEGIN IMMEDIATE transaction (WAL enabled first) that retries busy
+ * acquisition for up to five seconds, so concurrent startups serialize without
+ * blocking another caller's commit.
+ * @param {import('node:sqlite').DatabaseSync} db open database handle
+ * @param {string} filename database file path, or ':memory:' for in-memory
+ * @returns {object} adapter with kind, filename, prepare, exec, query, migrate, close
  */
 function sqliteAdapter(db, filename) {
   const self = {
@@ -107,11 +110,15 @@ function sqliteAdapter(db, filename) {
 }
 
 /**
- * Create a five-connection PostgreSQL pool and expose the shared database API.
- * Remote hosts default to verified TLS unless URL SSL options override it; ca
- * augments enabled TLS. Queries translate supported SQLite syntax and placeholders.
- * Migrations use one checked-out client and an advisory transaction lock, releasing
- * the client after commit or rollback. Closing the adapter ends the pool.
+ * Build the PostgreSQL adapter around a connection pool.
+ *
+ * TLS is verified for remote hosts by default; loopback and Unix-socket hosts
+ * use driver defaults, and explicit URL SSL options are passed through
+ * untouched. A PEM CA from DATABASE_SSL_CA is merged into the effective TLS
+ * settings so it survives connection-string parameter application.
+ * @param {string} connectionString value of DATABASE_URL
+ * @param {string|undefined} ca optional PEM CA text from DATABASE_SSL_CA
+ * @returns {Promise<object>} adapter with kind, prepare, exec, query, migrate, close
  */
 async function postgresAdapter(connectionString, ca) {
   const pgModule = await import('pg');
@@ -120,8 +127,12 @@ async function postgresAdapter(connectionString, ca) {
   // cannot overwrite our TLS defaults (or an explicitly supplied CA).
   const parameters = new pgModule.default.Client({ connectionString }).connectionParameters;
   const local = ['localhost', '127.0.0.1', '::1', '[::1]'].includes(parameters.host) || parameters.host.startsWith('/');
-  const url = new URL(connectionString);
-  const explicitSsl = ['ssl', 'sslmode', 'sslcert', 'sslkey', 'sslrootcert'].some(key => url.searchParams.has(key));
+  let url = null;
+  try { url = new URL(connectionString); } catch {
+    // Keyword-format or unencoded connection strings: pg already parsed them
+    // above, so treat them as having no explicit URL SSL parameters.
+  }
+  const explicitSsl = url ? ['ssl', 'sslmode', 'sslcert', 'sslkey', 'sslrootcert'].some(key => url.searchParams.has(key)) : false;
   let ssl = parameters.ssl;
   if (!explicitSsl && !ssl && !local) ssl = { rejectUnauthorized: true };
   if (ssl && ca) ssl = { ...(typeof ssl === 'object' ? ssl : {}), ca };
@@ -167,9 +178,11 @@ async function postgresAdapter(connectionString, ca) {
 }
 
 /**
- * Run a synchronous SQLite operation, retrying SQLITE_BUSY with asynchronous
- * ten-millisecond waits for up to five seconds. Return its result on success;
- * propagate other errors immediately and the last busy error on timeout.
+ * Run an operation, retrying SQLite busy errors (errcode 5, raised e.g. by
+ * BEGIN IMMEDIATE while another connection holds the write lock) for up to
+ * five seconds. Yields between attempts so the other connection can commit.
+ * @param {() => void} operation database operation to run
+ * @returns {Promise<void>} resolves when the operation succeeds within the deadline
  */
 async function sqliteRetry(operation) {
   const deadline = Date.now() + 5000;
@@ -227,10 +240,13 @@ export async function openDb({ env = process.env, dbPath } = {}) {
 }
 
 /**
- * Open SQLite at dbPath or command.sqlite under env.DATA_DIR (default .data).
- * Create parent directories with mode 0700 unless using ':memory:'. Disable the
- * driver's blocking busy timeout so migration lock retries can yield to callers.
- * Filesystem and connection errors reject the returned promise.
+ * Create the SQLite adapter for dbPath, defaulting to command.sqlite under
+ * env.DATA_DIR (default .data); ':memory:' opens an in-memory database and any
+ * other parent directory is created with mode 0700. dbPath is ignored when
+ * DATABASE_URL selects PostgreSQL.
+ * @param {string|undefined} dbPath explicit database file path
+ * @param {NodeJS.ProcessEnv} env process environment
+ * @returns {Promise<object>} SQLite adapter
  */
 async function sqliteAdapterFor(dbPath, env) {
   const path = dbPath ?? resolve(env.DATA_DIR || '.data', 'command.sqlite');
