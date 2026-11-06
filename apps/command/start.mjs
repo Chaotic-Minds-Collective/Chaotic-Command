@@ -19,6 +19,7 @@ const staticRoutes = new Map([
   ['/brand-icon-128.png', ['brand-icon-128.png', 'image/png']],
   ['/brand-icon-180.png', ['brand-icon-180.png', 'image/png']],
   ['/og-image.jpg', ['og-image.jpg', 'image/jpeg']],
+  ['/og-image.png', ['og-image.png', 'image/png']],
   ['/home.js', ['home.js', 'text/javascript; charset=utf-8']]
 ]);
 
