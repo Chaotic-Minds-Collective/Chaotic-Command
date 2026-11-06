@@ -118,6 +118,7 @@ p{margin:0 0 12px}
   border-top:1px solid var(--line);padding:22px 28px;color:var(--muted);font-size:.9rem}
 .site-footer .brand{gap:8px}
 .site-footer small{width:100%;color:var(--muted)}
+.footer-stamp{flex:0 0 auto;width:88px;height:88px;border-radius:50%;border:1px solid var(--green-dim);box-shadow:0 0 0 3px rgba(46,160,0,.08),0 0 18px rgba(46,160,0,.25)}
 
 button:focus-visible,a:focus-visible{outline:3px solid var(--green);outline-offset:3px}
 [hidden]{display:none!important}
@@ -162,5 +163,6 @@ button:focus-visible,a:focus-visible{outline:3px solid var(--green);outline-offs
   .closing-cta{padding:30px 18px}
   .console-row{padding:14px;gap:10px}
   .site-footer{padding:18px 16px}
+  .footer-stamp{width:64px;height:64px}
   .feature-card{padding:18px}
 }
