@@ -28,7 +28,9 @@ const TAB_IDS = ['dashboard', 'bot-management', 'server-picker', 'audit-panel', 
 function initTabs(name) {
   for (const id of TAB_IDS) { const panel = $(id); if (panel) panel.hidden = id !== name; }
   document.querySelectorAll('.section-tabs [role="tab"]').forEach(button => {
-    button.setAttribute('aria-selected', button.getAttribute('data-tab') === name ? 'true' : 'false');
+    const active = button.getAttribute('data-tab') === name;
+    button.setAttribute('aria-selected', String(active));
+    button.tabIndex = active ? 0 : -1;
   });
 }
 /** Show only the requested workspace panel, mark its tab, and refresh the dashboard when opened. */
@@ -61,11 +63,8 @@ async function renderDashboard() {
       serverLine = `${status.channels} channels \u00b7 ${status.roles} roles`;
       serverNote = 'Bot installed and ready on this server.';
     } catch (error) {
-      // Only claim the bot is missing when the server says so; other failures stay honest.
-      if (/denied access|membership/.test(error.message)) {
-        serverLine = 'Bot not installed';
-        serverNote = 'Use the Servers tab install link, then reselect this server.';
-      } else if (/Connect your own Discord bot/.test(error.message)) {
+      // The status API does not distinguish missing membership from denied permissions.
+      if (/Connect your own Discord bot/.test(error.message)) {
         serverLine = 'No bot assigned';
         serverNote = 'Connect or select a bot on the Bots tab, then reselect this server.';
       } else {
@@ -89,7 +88,10 @@ async function renderDashboard() {
   $('dashboard-quick').innerHTML = [['audit-panel', 'Run audit'], ['template-setup', 'Set up a server'], ['bot-management', 'Manage bots'], ['server-picker', 'Switch server']]
     .map(([tab, label]) => `<button type="button" class="dash-action" data-jump="${tab}">${esc(label)}</button>`).join('');
   document.querySelectorAll('#dashboard-quick [data-jump]').forEach(button => {
-    button.addEventListener('click', () => activateTab(button.getAttribute('data-jump')));
+    button.addEventListener('click', () => {
+      const tab = document.querySelector('.section-tabs [data-tab="' + button.getAttribute('data-jump') + '"]');
+      focusTab(tab);
+    });
   });
 }
 const TIERS = [
@@ -111,8 +113,8 @@ document.querySelector('.section-tabs').addEventListener('keydown', event => {
   if (!event.target.matches('[role="tab"]')) return;
   const tabs = [...document.querySelectorAll('.section-tabs [role="tab"]')];
   const at = tabs.indexOf(event.target);
-  if (event.key === 'ArrowRight' && at < tabs.length - 1) { event.preventDefault(); focusTab(tabs[at + 1]); }
-  if (event.key === 'ArrowLeft' && at > 0) { event.preventDefault(); focusTab(tabs[at - 1]); }
+  if (event.key === 'ArrowRight') { event.preventDefault(); focusTab(tabs[(at + 1) % tabs.length]); }
+  if (event.key === 'ArrowLeft') { event.preventDefault(); focusTab(tabs[(at - 1 + tabs.length) % tabs.length]); }
   if (event.key === 'Home') { event.preventDefault(); focusTab(tabs[0]); }
   if (event.key === 'End') { event.preventDefault(); focusTab(tabs[tabs.length - 1]); }
 });
