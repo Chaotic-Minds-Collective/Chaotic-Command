@@ -175,7 +175,7 @@ export function createApp(config = {}) {
           catch { if (attempt < 3) { attempt++; await new Promise(r => setTimeout(r, attempt * 1500)); continue; } throw new HttpError(502, 'Discord sign-in could not be reached. Start again.'); }
           if (response.status === 429 && attempt < 3) {
             const limit = await response.json().then(b => Number(b?.retry_after), () => NaN);
-            const delay = Number.isFinite(limit) && limit >= 0 && limit <= 10 ? limit : 2;
+            const delay = Number.isFinite(limit) && limit >= 0 ? Math.min(limit, 10) : 2;
             console.warn(`[oauth] token exchange rate limited; retrying in ${delay}s (attempt ${attempt + 1} of 3)`);
             attempt++;
             await new Promise(r => setTimeout(r, delay * 1000 + 250));
