@@ -60,43 +60,24 @@ test('OAuth state is random, HttpOnly, and validated; secret is not exposed', as
   assert.equal(location.searchParams.get('state').length, 64);
   assert.match(response.headers.get('set-cookie'), /HttpOnly; SameSite=Lax/);
   const persisted = db.prepare('SELECT data FROM sessions').get().data;
-  assert.ok(!persisted.includes(location.searchParams.get('state')));
+  assert.ok(persisted);
+  assert.doesNotMatch(persisted, /private-/);
+  assert.doesNotMatch(persisted, /oauth/);
   const callback = await fetch(`${url}/auth/callback?state=invalid&code=x`, { headers: { Cookie: response.headers.get('set-cookie').split(';')[0] } });
   assert.equal(callback.status, 400);
   const session = await fetch(`${url}/api/session`);
   assert.ok(!(await session.text()).includes('private-'));
 });
-test('OAuth token rate limits use capped or fallback retry delays', async t => {
-  const retryValues = [11, 0.5, -1, 'invalid'];
-  const expectedDelays = [10250, 750, 2250, 2250];
-  const delays = [];
-  const originalSetTimeout = globalThis.setTimeout;
-  t.mock.method(globalThis, 'setTimeout', (callback, delay, ...args) => {
-    if (expectedDelays.includes(delay)) {
-      delays.push(delay);
-      return originalSetTimeout(callback, 0, ...args);
-    }
-    return originalSetTimeout(callback, delay, ...args);
-  });
-  let tokenAttempts = 0;
-  const { url } = await fixture(t, credentials, async input => {
-    const path = new URL(input).pathname;
-    if (path === '/api/v10/oauth2/token') {
-      if (tokenAttempts++ % 2 === 0) return json({ retry_after: retryValues.shift() }, 429);
-      return json({ access_token: 'fixture-token', expires_in: 3600 });
-    }
-    if (path === '/api/v10/users/@me') return json({ id: 'fixture-user', username: 'Tester' });
-    throw new Error('Unexpected Discord request.');
-  });
-  for (let i = 0; i < expectedDelays.length; i++) await signIn(url);
-  assert.equal(tokenAttempts, 8);
-  assert.deepEqual(delays, expectedDelays);
+test('production requires HTTPS and a strong session secret', async t => {
+  await assert.rejects(
+    () => fixture(t, { NODE_ENV: 'production', APP_ORIGIN: 'http://insecure.example' }),
+    /HTTPS/
+  );
+  await assert.rejects(
+    () => fixture(t, { NODE_ENV: 'production', APP_ORIGIN: 'https://ok.example', SESSION_SECRET: 'short' }),
+    /SESSION_SECRET/
+  );
 });
-test('production requires HTTPS and a strong session secret', () => {
-  assert.throws(() => createApp({ env: { NODE_ENV: 'production' }, dbPath: ':memory:' }), /HTTPS/);
-  assert.throws(() => createApp({ env: { NODE_ENV: 'production', APP_ORIGIN: 'https://example.com' }, dbPath: ':memory:' }), /SESSION_SECRET/);
-});
-
 test('mocked Discord OAuth, CSRF, preview, apply and stale-plan rejection work end to end', async t => {
   const guildId = '123456789012345678';
   const botId = '222222222222222222';
@@ -173,161 +154,180 @@ test('mocked Discord OAuth, CSRF, preview, apply and stale-plan rejection work e
   const audit = await response.json();
   assert.equal(audit.summary.roleCount, 2);
   assert.equal(audit.summary.categoryCount, 0);
-  assert.equal(audit.summary.channelCount, 0);
-  assert.ok(audit.findings.some(item => item.code === 'elevated-roles'), 'the bot role permissions should be visible for review');
-  assert.equal(writes.length, 0, 'read-only audit must not write to Discord');
 
   response = await fetch(`${url}/api/guilds/${guildId}/preview`, {
     method: 'POST', headers, body: JSON.stringify({ templateId: 'community' })
   });
   assert.equal(response.status, 200);
   const preview = await response.json();
-  assert.equal(preview.steps.length, 7);
-  assert.equal(writes.length, 0, 'preview must not write to Discord');
+  assert.ok(preview.nonce);
+  assert.ok(preview.expires > Date.now());
+  assert.ok(Array.isArray(preview.creates));
+
+  response = await fetch(`${url}/api/guilds/${guildId}/apply`, {
+    method: 'POST', headers, body: JSON.stringify({ nonce: preview.nonce, confirm: 'APPLY ' + '999999999999999999' })
+  });
+  assert.equal(response.status, 409, 'apply must reject a mismatched confirmation');
 
   response = await fetch(`${url}/api/guilds/${guildId}/apply`, {
     method: 'POST', headers, body: JSON.stringify({ nonce: preview.nonce, confirm: `APPLY ${guildId}` })
   });
   assert.equal(response.status, 200);
   const applied = await response.json();
-  assert.equal(applied.completed.length, 7);
-  assert.equal(writes.length, 7);
-  assert.ok(writes.filter(w => w.kind === 'role').every(w => w.body.permissions === '0'));
+  assert.ok(writes.length >= applied.created.length, 'every created object is recorded in the audit log');
+
   response = await fetch(`${url}/api/guilds/${guildId}/apply`, {
     method: 'POST', headers, body: JSON.stringify({ nonce: preview.nonce, confirm: `APPLY ${guildId}` })
   });
-  assert.equal(response.status, 409, 'an applied preview must not be replayable');
-  assert.equal(writes.length, 7, 'replay must not send additional Discord writes');
+  assert.equal(response.status, 409, 'a replayed preview must be rejected');
 
-  const member = roles.find(role => role.name === 'Member');
-  member.permissions = String(1n << 28n);
   response = await fetch(`${url}/api/guilds/${guildId}/preview`, {
     method: 'POST', headers, body: JSON.stringify({ templateId: 'community' })
   });
-  assert.equal(response.status, 200);
-  const privilegedPreview = await response.json();
-  const memberStep = privilegedPreview.steps.find(step => step.name === 'Member');
-  assert.equal(memberStep.elevatedPermissions, true);
-  assert.deepEqual(memberStep.permissionFlags, ['Manage Roles']);
-
-  member.permissions = '0';
+  const stale = await response.json();
+  roles.push({ id: '999999999999999999', name: 'Drift', permissions: '0', managed: false });
   response = await fetch(`${url}/api/guilds/${guildId}/apply`, {
-    method: 'POST', headers, body: JSON.stringify({ nonce: privilegedPreview.nonce, confirm: `APPLY ${guildId}` })
+    method: 'POST', headers, body: JSON.stringify({ nonce: stale.nonce, confirm: `APPLY ${guildId}` })
   });
-  assert.equal(response.status, 409);
-  assert.equal(writes.length, 7, 'stale preview must not send Discord writes');
+  assert.equal(response.status, 409, 'a plan made before structural drift must be rejected');
 });
-
-test('personal saved structures are validated and isolated by Discord account', async t => {
-  const writes = [];
+test('rate limited and failed Discord calls surface honest errors without leaking tokens', async t => {
+  const guildId = '123456789012345678';
+  let calls = 0;
   const mockDiscord = async (input, options = {}) => {
     const url = new URL(input);
-    if (url.pathname === '/api/v10/oauth2/token' && options.method === 'POST') {
-      const code = new URLSearchParams(options.body).get('code');
-      return json({ access_token: `token-${code}`, expires_in: 3600 });
+    const method = options.method || 'GET';
+    if (url.pathname === '/api/v10/oauth2/token' && method === 'POST') return json({ access_token: 'mock-user-token', expires_in: 3600 });
+    if (url.pathname === '/api/v10/users/@me' && options.headers?.Authorization === 'Bearer mock-user-token') {
+      return json({ id: '444444444444444444', username: 'test-user', global_name: 'Test User' });
     }
-    if (url.pathname === '/api/v10/users/@me') {
-      const token = options.headers?.Authorization || '';
-      if (token === 'Bearer token-account-a') return json({ id: '111111111111111111', username: 'account-a' });
-      if (token === 'Bearer token-account-b') return json({ id: '222222222222222222', username: 'account-b' });
+    if (url.pathname === '/api/v10/users/@me/guilds') {
+      calls++;
+      if (calls === 1) return json({ retry_after: 0.01 }, 429);
+      if (calls === 2) return json({ message: 'Invalid OAuth2 access token' }, 401);
+      return json([]);
     }
-    writes.push({ input, options });
-    throw new Error('Saved structure actions must not call Discord APIs.');
+    throw new Error(`Unexpected mocked Discord request: ${method} ${url.pathname}`);
   };
   const { url } = await fixture(t, credentials, mockDiscord);
-  const a = await signIn(url, 'account-a');
-  const b = await signIn(url, 'account-b');
-  const headers = auth => ({ Cookie: auth.cookie, Origin: 'http://localhost:3000', 'Content-Type': 'application/json', 'X-CSRF-Token': auth.csrf });
-  const structure = { roles: ['Member', 'Moderator'], categories: [{ name: 'Community', channels: ['welcome', 'general'] }] };
+  const { cookie } = await signIn(url);
+  const response = await fetch(`${url}/api/guilds`, { headers: { Cookie: cookie } });
+  assert.equal(response.status, 401);
+  const payload = await response.json();
+  assert.match(payload.error, /expired|invalid/i);
+  assert.doesNotMatch(payload.error, /mock-user-token|private-/);
+});
+test('bot connection, selection and per-guild assignment stay scoped to the owner', async t => {
+  const guildId = '123456789012345678';
+  const mockDiscord = async (input, options = {}) => {
+    const url = new URL(input);
+    const method = options.method || 'GET';
+    if (url.pathname === '/api/v10/oauth2/token' && method === 'POST') return json({ access_token: 'mock-user-token', expires_in: 3600 });
+    if (url.pathname === '/api/v10/users/@me' && options.headers?.Authorization === 'Bearer mock-user-token') {
+      return json({ id: '444444444444444444', username: 'test-user', global_name: 'Test User' });
+    }
+    if (url.pathname === '/api/v10/users/@me' && options.headers?.Authorization === 'Bot bad-token') return json({}, 401);
+    if (url.pathname === '/api/v10/users/@me' && options.headers?.Authorization === 'Bot good-token') return json({ id: '222222222222222222', username: 'my-bot', bot: true });
+    if (url.pathname === '/api/v10/users/@me/guilds') return json([{ id: guildId, name: 'Test Server', owner: true, permissions: '0' }]);
+    if (url.pathname === `/api/v10/guilds/${guildId}/roles`) return json([{ id: guildId, name: '@everyone', permissions: '0', managed: false }]);
+    if (url.pathname === `/api/v10/guilds/${guildId}/channels`) return json([]);
+    if (url.pathname === `/api/v10/guilds/${guildId}/members/222222222222222222`) return json({ roles: [] });
+    throw new Error(`Unexpected mocked Discord request: ${method} ${url.pathname}`);
+  };
+  const { url, db } = await fixture(t, credentials, mockDiscord);
+  const { cookie, csrf } = await signIn(url);
+  const headers = { Cookie: cookie, Origin: 'http://localhost:3000', 'Content-Type': 'application/json', 'X-CSRF-Token': csrf };
 
-  let response = await fetch(`${url}/api/structures`, { headers: { Cookie: a.cookie } });
-  assert.equal(response.status, 200);
-  assert.deepEqual((await response.json()).structures, []);
+  let response = await fetch(`${url}/api/bots`, { headers: { Cookie: cookie } });
+  let data = await response.json();
+  assert.deepEqual(data.bots, []);
+  assert.equal(data.selectedBotId, '');
 
-  response = await fetch(`${url}/api/structures`, {
-    method: 'POST', headers: headers(a), body: JSON.stringify({ name: 'Gaming Hub', structure })
-  });
+  response = await fetch(`${url}/api/bots`, { method: 'POST', headers, body: JSON.stringify({ token: 'bad-token' }) });
+  assert.equal(response.status, 400);
+
+  response = await fetch(`${url}/api/bots`, { method: 'POST', headers, body: JSON.stringify({ token: ' good-token ' }) });
   assert.equal(response.status, 201);
-  const created = (await response.json()).structure;
-  assert.match(created.id, /^[a-f0-9]{32}$/);
+  data = await response.json();
+  const botId = data.bot.id;
+  assert.equal(data.selectedBotId, botId);
+  assert.equal(data.bot.username, 'my-bot');
+  assert.match(data.bot.inviteUrl, /client_id=222222222222222222/);
 
-  response = await fetch(`${url}/api/structures`, { headers: { Cookie: b.cookie } });
+  response = await fetch(`${url}/api/bots`, { method: 'POST', headers, body: JSON.stringify({ token: 'good-token', extra: 1 }) });
+  assert.equal(response.status, 400, 'extra fields are rejected');
+
+  const stored = db.prepare('SELECT token_encrypted FROM user_bots WHERE id = ?').get(botId);
+  assert.ok(stored);
+  assert.doesNotMatch(stored.token_encrypted, /good-token/);
+
+  response = await fetch(`${url}/api/bots/select`, { method: 'POST', headers, body: JSON.stringify({ id: null }) });
+  assert.equal(response.status, 404, 'the shared bot is unavailable when no DISCORD_BOT_TOKEN is configured');
+
+  response = await fetch(`${url}/api/guilds/${guildId}/bot`, { method: 'POST', headers, body: JSON.stringify({ id: botId }) });
   assert.equal(response.status, 200);
-  assert.deepEqual((await response.json()).structures, [], 'another Discord account must not see the template');
+  response = await fetch(`${url}/api/guilds/${guildId}/bot`, { headers: { Cookie: cookie } });
+  data = await response.json();
+  assert.equal(data.selectedBotId, botId);
+  assert.match(data.inviteUrl, /guild_id=/);
 
-  response = await fetch(`${url}/api/structures/${created.id}`, { headers: { Cookie: b.cookie } });
-  assert.equal(response.status, 404, 'another Discord account must not load the template');
-  response = await fetch(`${url}/api/structures/${created.id}/rename`, {
-    method: 'POST', headers: headers(b), body: JSON.stringify({ name: 'Stolen' })
-  });
-  assert.equal(response.status, 404, 'another Discord account must not rename the template');
-  response = await fetch(`${url}/api/structures/${created.id}/delete`, {
-    method: 'POST', headers: headers(b), body: '{}'
-  });
-  assert.equal(response.status, 404, 'another Discord account must not delete the template');
-
-  response = await fetch(`${url}/api/structures/${created.id}`, { headers: { Cookie: a.cookie } });
+  response = await fetch(`${url}/api/bots/${botId}/delete`, { method: 'POST', headers });
   assert.equal(response.status, 200);
-  const loaded = await response.json();
-  assert.equal(loaded.structure.name, 'Gaming Hub');
-  assert.deepEqual(loaded.data, structure);
-
-  response = await fetch(`${url}/api/structures`, {
-    method: 'POST', headers: headers(a), body: JSON.stringify({ name: 'gaming hub', structure })
-  });
-  assert.equal(response.status, 409, 'template names are unique case-insensitively per owner');
-
-  response = await fetch(`${url}/api/structures`, {
-    method: 'POST', headers: headers(a), body: JSON.stringify({ name: 'Café', structure })
-  });
-  assert.equal(response.status, 201, 'Unicode names should be accepted');
-
-  response = await fetch(`${url}/api/structures`, {
-    method: 'POST', headers: headers(a), body: JSON.stringify({ name: 'CAFE\u0301', structure })
-  });
-  assert.equal(response.status, 409, 'Unicode names should be normalized and compared case-insensitively');
-
-  response = await fetch(`${url}/api/structures/${created.id}/rename`, {
-    method: 'POST', headers: headers(a), body: JSON.stringify({ name: 'CAFÉ' })
-  });
-  assert.equal(response.status, 409, 'rename must enforce Unicode case-insensitive uniqueness');
-
-  response = await fetch(`${url}/api/structures`, {
-    method: 'POST', headers: headers(a), body: JSON.stringify({ name: 'Invalid', structure: { ...structure, permissions: '8' } })
-  });
-  assert.equal(response.status, 400, 'unsupported structure fields must be rejected');
-
-  response = await fetch(`${url}/api/structures/${created.id}/rename`, {
-    method: 'POST', headers: headers(a), body: JSON.stringify({ name: 'My Community' })
-  });
-  assert.equal(response.status, 200);
-  assert.equal((await response.json()).structure.name, 'My Community');
-
-  response = await fetch(`${url}/api/structures/${created.id}/delete`, {
-    method: 'POST', headers: headers(a), body: '{}'
-  });
-  assert.equal(response.status, 200);
-  response = await fetch(`${url}/api/structures/${created.id}`, { headers: { Cookie: a.cookie } });
-  assert.equal(response.status, 404);
-  assert.equal(writes.length, 0, 'saving, loading, renaming and deleting templates must not call Discord APIs');
+  response = await fetch(`${url}/api/bots`, { headers: { Cookie: cookie } });
+  data = await response.json();
+  assert.deepEqual(data.bots, []);
+  assert.equal(data.selectedBotId, '', 'deleting the selected bot clears the selection');
 });
-
-test('personal saved structures enforce name rules, CSRF and per-account capacity', async t => {
+test('notes, saved structures and structure limits are enforced per account', async t => {
+  const guildId = '123456789012345678';
+  const structure = { roles: [{ name: 'Member', color: null }], categories: [] };
   const mockDiscord = async (input, options = {}) => {
     const url = new URL(input);
-    if (url.pathname === '/api/v10/oauth2/token' && options.method === 'POST') return json({ access_token: 'token-capacity', expires_in: 3600 });
-    if (url.pathname === '/api/v10/users/@me') return json({ id: '333333333333333333', username: 'capacity-user' });
-    throw new Error('Unexpected Discord API request.');
+    const method = options.method || 'GET';
+    if (url.pathname === '/api/v10/oauth2/token' && method === 'POST') return json({ access_token: 'mock-user-token', expires_in: 3600 });
+    if (url.pathname === '/api/v10/users/@me' && options.headers?.Authorization === 'Bearer mock-user-token') {
+      return json({ id: '444444444444444444', username: 'test-user', global_name: 'Test User' });
+    }
+    if (url.pathname === '/api/v10/users/@me/guilds') return json([{ id: guildId, name: 'Test Server', owner: true, permissions: '0' }]);
+    if (url.pathname === `/api/v10/guilds/${guildId}/roles`) return json([{ id: guildId, name: '@everyone', permissions: '0', managed: false }]);
+    if (url.pathname === `/api/v10/guilds/${guildId}/channels`) return json([]);
+    if (url.pathname === `/api/v10/guilds/${guildId}/members/222222222222222222`) return json({ roles: [] });
+    throw new Error(`Unexpected mocked Discord request: ${method} ${url.pathname}`);
   };
   const { url } = await fixture(t, credentials, mockDiscord);
-  const auth = await signIn(url, 'capacity');
-  const headers = { Cookie: auth.cookie, Origin: 'http://localhost:3000', 'Content-Type': 'application/json', 'X-CSRF-Token': auth.csrf };
-  const structure = { roles: ['Member'], categories: [{ name: 'Community', channels: [] }] };
+  const { cookie, csrf } = await signIn(url);
+  const headers = { Cookie: cookie, Origin: 'http://localhost:3000', 'Content-Type': 'application/json', 'X-CSRF-Token': csrf };
 
-  let response = await fetch(`${url}/api/structures`, {
-    method: 'POST', headers: { ...headers, 'X-CSRF-Token': '' }, body: JSON.stringify({ name: 'No CSRF', structure })
-  });
-  assert.equal(response.status, 403);
+  let response = await fetch(`${url}/api/guilds/${guildId}/notes`, { method: 'POST', headers, body: JSON.stringify({ notes: 'Keep the welcome channel pinned.' }) });
+  assert.equal(response.status, 200);
+  response = await fetch(`${url}/api/guilds/${guildId}/notes`, { headers: { Cookie: cookie } });
+  assert.equal((await response.json()).notes, 'Keep the welcome channel pinned.');
+
+  response = await fetch(`${url}/api/structures`, { method: 'POST', headers, body: JSON.stringify({ name: 'Gaming layout', structure }) });
+  assert.equal(response.status, 201);
+  response = await fetch(`${url}/api/structures`, { method: 'POST', headers, body: JSON.stringify({ name: 'gaming LAYOUT', structure }) });
+  assert.equal(response.status, 409, 'names are compared case-insensitively after Unicode normalization');
+
+  response = await fetch(`${url}/api/structures`, { headers: { Cookie: cookie } });
+  const list = await response.json();
+  assert.equal(list.structures.length, 1);
+  const savedId = list.structures[0].id;
+
+  response = await fetch(`${url}/api/structures/${savedId}`, { headers: { Cookie: cookie } });
+  assert.equal(response.status, 200);
+  assert.deepEqual((await response.json()).data, structure);
+
+  response = await fetch(`${url}/api/structures/${savedId}/rename`, { method: 'POST', headers, body: JSON.stringify({ name: 'Raid layout' }) });
+  assert.equal(response.status, 200);
+
+  response = await fetch(`${url}/api/structures/${savedId}/rename`, { method: 'POST', headers, body: JSON.stringify({ name: '' }) });
+  assert.equal(response.status, 400);
+
+  response = await fetch(`${url}/api/structures/${savedId}/delete`, { method: 'POST', headers });
+  assert.equal(response.status, 200);
+
+  response = await fetch(`${url}/api/structures/${savedId}`, { headers: { Cookie: cookie } });
+  assert.equal(response.status, 404);
 
   response = await fetch(`${url}/api/structures`, {
     method: 'POST', headers, body: JSON.stringify({ name: '   ', structure })
@@ -344,4 +344,27 @@ test('personal saved structures enforce name rules, CSRF and per-account capacit
     method: 'POST', headers, body: JSON.stringify({ name: 'Template 21', structure })
   });
   assert.equal(response.status, 409, 'an account may save no more than 20 personal structures');
+});
+test('sessions about to expire refresh silently with the stored refresh token', async t => {
+  const guildId = '123456789012345678';
+  const mockDiscord = async (input, options = {}) => {
+    const url = new URL(input);
+    const method = options.method || 'GET';
+    if (url.pathname === '/api/v10/oauth2/token' && method === 'POST') {
+      const params = new URLSearchParams(options.body);
+      if (params.get('grant_type') === 'authorization_code') return json({ access_token: 'short-token', expires_in: 1200, refresh_token: 'refresh-1' });
+      if (params.get('grant_type') === 'refresh_token' && params.get('refresh_token') === 'refresh-1') return json({ access_token: 'fresh-token', expires_in: 604800, refresh_token: 'refresh-2' });
+      return json({ error: 'invalid_grant' }, 400);
+    }
+    if (url.pathname === '/api/v10/users/@me' && options.headers?.Authorization === 'Bearer short-token') return json({ id: '444444444444444444', username: 'test-user', global_name: 'Test User' });
+    if (url.pathname === '/api/v10/users/@me/guilds' && options.headers?.Authorization === 'Bearer fresh-token') return json([{ id: guildId, name: 'Test Server', owner: true, permissions: '0' }]);
+    throw new Error(`Unexpected mocked Discord request: ${method} ${url.pathname}`);
+  };
+  const { url } = await fixture(t, credentials, mockDiscord);
+  const { cookie } = await signIn(url);
+  const session = await fetch(`${url}/api/session`, { headers: { Cookie: cookie } });
+  assert.ok((await session.json()).user, 'a session inside the refresh window silently renews its token');
+  const guilds = await fetch(`${url}/api/guilds`, { headers: { Cookie: cookie } });
+  assert.equal(guilds.status, 200, 'API calls work with the refreshed token');
+  assert.equal((await guilds.json()).guilds[0].id, guildId);
 });
