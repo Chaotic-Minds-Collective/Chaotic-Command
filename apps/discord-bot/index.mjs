@@ -287,7 +287,14 @@ function startHealthEndpoint() {
       return;
     }
     const healthy = status.state === 'ready';
-    const safeStatus = { ...status, lastError: status.lastError ? 'Gateway error; details are logged server-side' : null };
+    const safeStatus = {
+      state: status.state,
+      connectedSince: status.connectedSince,
+      lastReadyAt: status.lastReadyAt,
+      lastSequence: status.lastSequence,
+      reconnectAttempts: status.reconnectAttempts,
+      hasError: Boolean(status.lastError),
+    };
     res.writeHead(healthy ? 200 : 503, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(safeStatus));
   });
