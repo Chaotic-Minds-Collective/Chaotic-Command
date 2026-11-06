@@ -1,0 +1,35 @@
+name: Apply pricing tab
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch and verify files
+        run: |
+          curl -fsSL -o /tmp/home_pricing.html.b64 https://n.uguu.se/jTSAqfBn.txt
+          echo "6cc6409431980144fec70cb46c26fbcf071383bff84c6d12240f0303f25db7f9  /tmp/home_pricing.html.b64" | sha256sum -c -
+          base64 -d /tmp/home_pricing.html.b64 > /tmp/home_pricing.html
+          curl -fsSL -o /tmp/home_pricing.css https://n.uguu.se/NTPsSpow.css
+          echo "0ddc2e49f961992fc4baec3d974f40377445dc5ca7d950cb4bf164fb63cc8ec2  /tmp/home_pricing.css" | sha256sum -c -
+      - name: Commit pricing tab to branch
+        run: |
+          git config user.name "cm-littlebird"
+          git config user.email "actions@users.noreply.github.com"
+          git checkout -b feature/pricing-tab
+          cp /tmp/home_pricing.html apps/command/web/home.html
+          cp /tmp/home_pricing.css apps/command/web/home.css
+          git add apps/command/web/home.html apps/command/web/home.css
+          git commit -m "Add Pricing tab: 4 tiers, comparison table, launch notes"
+          git push origin feature/pricing-tab
+      - name: Self-disarm (remove this workflow from main)
+        run: |
+          git config user.name "cm-littlebird"
+          git config user.email "actions@users.noreply.github.com"
+          git checkout main
+          git rm .github/workflows/apply-pricing-tab.yml
+          git commit -m "Remove one-shot pricing workflow"
+          git push origin main
