@@ -1,4 +1,13 @@
+/** Initialize homepage tabs and redirect visitors with an active session to the command center. */
 (function () {
+  // Signed-in visitors land straight in the command center; everyone else sees the homepage.
+  if (window.fetch && window.location && window.location.replace) {
+    window.fetch('/api/session').then(function (response) { return response.json(); }).then(
+      /** Redirect only when the loaded session contains a user; anonymous visitors stay here. */
+      function (session) {
+      if (session && session.user) window.location.replace('/command');
+    }).catch(function () {});
+  }
   var tabs = Array.prototype.slice.call(document.querySelectorAll('.nav-tab'));
   if (!tabs.length) return;
   function activate(name) {
