@@ -1,13 +1,13 @@
 :root{
   --ops-black:#0a0f0c; --panel:#0f1512; --panel-2:#0c110e; --line:#1d2a22;
-  --green:#2ee86b; --green-dim:#1f9e4b; --turquoise:#2ee8d6; --bone:#edeae2;
-  --muted:#9aa89f; --amber:#ffb020; --red:#ff4b3e;
+  --green:#2ea000; --green-dim:#1f7a00; --turquoise:#2ee8d6; --bone:#edeae2;
+  --muted:#9aa89f; --amber:#ffb020; --red:#ff4b3e; --purple:#a55ee6;
   --mono:'Share Tech Mono',ui-monospace,monospace; --sans:'Inter',system-ui,sans-serif;
 }
 *{box-sizing:border-box}
 html{scroll-behavior:smooth}
 body{margin:0;background:var(--ops-black);color:var(--bone);font-family:var(--sans);line-height:1.6;
-  background-image:linear-gradient(rgba(46,232,107,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(46,232,107,.03) 1px,transparent 1px);
+  background-image:linear-gradient(rgba(46,160,0,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(46,160,0,.03) 1px,transparent 1px);
   background-size:44px 44px}
 h1,h2,h3,.eyebrow,.brand-word,.frame-label,.frame-live,.feature-number,.float-chip{font-family:var(--mono)}
 a{color:var(--turquoise)}
@@ -25,7 +25,7 @@ a{color:var(--turquoise)}
 .nav-tab{font-family:var(--mono);font-size:.85rem;letter-spacing:.06em;background:none;border:1px solid transparent;
   color:var(--muted);padding:8px 14px;border-radius:7px;cursor:pointer}
 .nav-tab:hover{color:var(--bone);border-color:var(--line)}
-.nav-tab[aria-selected="true"]{color:var(--green);border-color:var(--green-dim);background:rgba(46,232,107,.08)}
+.nav-tab[aria-selected="true"]{color:var(--green);border-color:var(--green-dim);background:rgba(46,160,0,.08)}
 .nav-link{font-family:var(--mono);font-size:.85rem;letter-spacing:.06em;color:var(--muted);padding:8px 14px;text-decoration:none;border-radius:7px}
 .nav-link:hover{color:var(--turquoise)}
 
@@ -33,9 +33,9 @@ a{color:var(--turquoise)}
 .button{display:inline-block;font-family:var(--mono);letter-spacing:.04em;border-radius:8px;padding:12px 20px;
   text-decoration:none;border:1px solid transparent;cursor:pointer;font-size:.95rem;background:transparent}
 .button-primary{background:var(--green);color:#04140a;border-color:var(--green)}
-.button-primary:hover{background:#4df085}
+.button-primary:hover{background:#48c400}
 .button-outline{border-color:var(--green-dim);color:var(--green)}
-.button-outline:hover{background:rgba(46,232,107,.08)}
+.button-outline:hover{background:rgba(46,160,0,.08)}
 .button-quiet{background:rgba(15,21,18,.85);border-color:var(--line);color:var(--bone)}
 .button-quiet:hover{border-color:var(--green-dim);color:var(--green)}
 header .button{padding:9px 16px;font-size:.85rem}
@@ -59,7 +59,7 @@ p{margin:0 0 12px}
 .hero-note{color:var(--muted);font-size:.9rem;display:flex;gap:8px;align-items:center}
 .shield{color:var(--green)}
 .hero-frame{margin:0;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--panel);
-  box-shadow:0 0 0 1px rgba(46,232,107,.06),0 24px 60px rgba(0,0,0,.55)}
+  box-shadow:0 0 0 1px rgba(46,160,0,.06),0 24px 60px rgba(0,0,0,.55)}
 .frame-top{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line);
   font-size:.72rem;letter-spacing:.12em;color:var(--muted)}
 .frame-live{color:var(--green)}
@@ -82,10 +82,10 @@ p{margin:0 0 12px}
   transition:border-color .2s,transform .2s}
 .feature-card:hover{border-color:var(--green-dim);transform:translateY(-3px)}
 .feature-number{color:var(--muted);font-size:.72rem;letter-spacing:.14em}
-.feature-icon{width:64px;height:64px;border-radius:12px;border:1px solid var(--green-dim);background:rgba(46,232,107,.08);
+.feature-icon{width:64px;height:64px;border-radius:12px;border:1px solid var(--green-dim);background:rgba(46,160,0,.08);
   display:flex;align-items:center;justify-content:center;font-size:1.5rem;color:var(--green)}
 .feature-icon img{border-radius:8px}
-.feature-icon-alt{background:rgba(46,232,107,.08)}
+.feature-icon-alt{border-color:rgba(165,94,230,.5);background:rgba(165,94,230,.1);color:var(--purple)}
 .feature-card h3{margin:2px 0 0;font-size:1.15rem;font-weight:600}
 .feature-card p{color:var(--muted);font-size:.95rem;flex:1}
 .feature-card a{font-family:var(--mono);font-size:.85rem;text-decoration:none;color:var(--turquoise)}
