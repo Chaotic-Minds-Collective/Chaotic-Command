@@ -236,11 +236,7 @@ function gatewayUrl() {
   try {
     const url = new URL(resumeGatewayUrl);
     if (url.protocol !== 'wss:' || url.hostname !== 'gateway.discord.gg' || url.username || url.password || url.port) throw new Error('unexpected Gateway URL');
-    url.pathname = '/';
-    url.search = '';
-    url.searchParams.set('v', '10');
-    url.searchParams.set('encoding', 'json');
-    return url.href;
+    return DISCORD_GATEWAY;
   } catch {
     log('warn', 'Invalid Discord resume Gateway URL; using the standard endpoint');
     resumeGatewayUrl = null;
@@ -291,8 +287,9 @@ function startHealthEndpoint() {
       return;
     }
     const healthy = status.state === 'ready';
+    const safeStatus = { ...status, lastError: status.lastError ? 'Gateway error; details are logged server-side' : null };
     res.writeHead(healthy ? 200 : 503, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify(status));
+    res.end(JSON.stringify(safeStatus));
   });
   server.listen(healthPort, healthHost, () => log('info', 'health endpoint listening', { host: healthHost, port: healthPort }));
 }
