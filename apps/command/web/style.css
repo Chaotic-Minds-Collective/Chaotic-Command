@@ -19,12 +19,14 @@
 .report-empty{color:var(--muted);font-style:italic;margin:6px 0}
 .findings{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
 .findings li{border:1px solid var(--line);border-left-width:3px;border-radius:8px;padding:8px 12px;background:var(--panel)}
-.sev-high{border-left-color:var(--amber)}
-.sev-medium{border-left-color:var(--amber)}
-.sev-low{border-left-color:var(--line)}
-.sev-info{border-left-color:var(--green)}
+.findings .sev-high{border-left-color:var(--amber)}
+.findings .sev-medium{border-left-color:var(--amber)}
+.findings .sev-warning{border-left-color:var(--amber)}
+.findings .sev-low{border-left-color:var(--line)}
+.findings .sev-info{border-left-color:var(--green)}
 .sev-badge{font-family:var(--mono);font-size:.72rem;letter-spacing:.08em;padding:2px 8px;border-radius:999px;border:1px solid var(--line);margin-right:4px}
 .sev-high .sev-badge{color:var(--amber);border-color:var(--amber)}
+.sev-warning .sev-badge{color:var(--amber);border-color:var(--amber)}
 .sev-medium .sev-badge{color:var(--amber)}
 .sev-low .sev-badge,.sev-info .sev-badge{color:var(--muted)}
 .report-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
