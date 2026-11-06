@@ -22,6 +22,7 @@ a{color:var(--turquoise)}
 .brand-word{font-size:1.05rem;letter-spacing:.08em}
 .brand-accent{color:var(--green)}
 .main-nav{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-left:auto}
+.tab-list{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 .nav-tab{font-family:var(--mono);font-size:.85rem;letter-spacing:.06em;background:none;border:1px solid transparent;
   color:var(--muted);padding:8px 14px;border-radius:7px;cursor:pointer}
 .nav-tab:hover{color:var(--bone);border-color:var(--line)}
@@ -120,7 +121,7 @@ p{margin:0 0 12px}
 .site-footer small{width:100%;color:var(--muted)}
 .footer-stamp{flex:0 0 auto;width:88px;height:88px;border-radius:50%;border:1px solid var(--green-dim);box-shadow:0 0 0 3px rgba(46,160,0,.08),0 0 18px rgba(46,160,0,.25)}
 
-button:focus-visible,a:focus-visible{outline:3px solid var(--green);outline-offset:3px}
+button:focus-visible,a:focus-visible,[tabindex="0"]:focus-visible{outline:3px solid var(--green);outline-offset:3px}
 [hidden]{display:none!important}
 
 @media(max-width:900px){
@@ -150,6 +151,7 @@ button:focus-visible,a:focus-visible{outline:3px solid var(--green);outline-offs
   .site-header{gap:10px;padding:10px 12px}
   .brand-word{font-size:.95rem}
   .main-nav{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;gap:4px;-webkit-overflow-scrolling:touch}
+  .tab-list{flex-wrap:nowrap;flex:0 0 auto;gap:4px}
   .main-nav::-webkit-scrollbar{display:none}
   .nav-tab,.nav-link{flex:0 0 auto;white-space:nowrap;padding:10px 12px}
   .hero-actions{gap:10px}
