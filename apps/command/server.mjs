@@ -147,11 +147,29 @@ export function createApp(config = {}) {
     /** Silently renew an expiring Discord access token with the stored refresh token, sliding the session window. */
     const ensureFreshToken = async () => {
       if (!session?.user || !session.refresh || session.tokenExpires > Date.now() + 30 * 60000) return;
+      const attemptedRefresh = session.refresh;
+      const reloadSession = () => {
+        const row = db.prepare('SELECT data FROM sessions WHERE id = ? AND expires > ?').get(sessionKey(sid), Date.now());
+        session = row ? decrypt(row.data) : null;
+      };
       try {
-        const response = await fetcher('https://discord.com/api/v10/oauth2/token', { method: 'POST', signal: AbortSignal.timeout(15000), headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'ChaoticCommand/1.0 (+https://command.chaoticmindsgaming.com)' }, body: new URLSearchParams({ client_id: env.DISCORD_CLIENT_ID, client_secret: env.DISCORD_CLIENT_SECRET, grant_type: 'refresh_token', refresh_token: session.refresh }) });
-        if (!response.ok) { console.warn(`[oauth] token refresh failed: status ${response.status}`); return; }
+        const response = await fetcher('https://discord.com/api/v10/oauth2/token', { method: 'POST', signal: AbortSignal.timeout(15000), headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'ChaoticCommand/1.0 (+https://command.chaoticmindsgaming.com)' }, body: new URLSearchParams({ client_id: env.DISCORD_CLIENT_ID, client_secret: env.DISCORD_CLIENT_SECRET, grant_type: 'refresh_token', refresh_token: attemptedRefresh }) });
+        if (!response.ok) {
+          const error = await response.json().catch(() => null);
+          if (response.status >= 400 && response.status < 500 && error?.error === 'invalid_grant') {
+            reloadSession();
+            if (session?.refresh === attemptedRefresh) {
+              delete session.refresh;
+              persist();
+            }
+          }
+          console.warn(`[oauth] token refresh failed: status ${response.status}`);
+          return;
+        }
         const token = await response.json();
         if (!token.access_token || !Number.isFinite(token.expires_in) || token.expires_in <= 0) { console.warn('[oauth] token refresh returned an invalid token response'); return; }
+        reloadSession();
+        if (!session || session.refresh !== attemptedRefresh) return;
         session.token = token.access_token;
         session.tokenExpires = Date.now() + token.expires_in * 1000;
         if (token.refresh_token) session.refresh = token.refresh_token;
@@ -159,7 +177,6 @@ export function createApp(config = {}) {
         persist();
       } catch (error) { console.warn(`[oauth] token refresh could not be reached: ${error?.message || error}`); }
     };
-    await ensureFreshToken();
     try {
       const url = new URL(req.url, origin), path = url.pathname;
       if (req.method === 'GET' && assets.has(path)) {
@@ -167,6 +184,7 @@ export function createApp(config = {}) {
         res.writeHead(200, { 'Content-Type': type }); res.end(readFileSync(resolve(here, 'web', file))); return;
       }
       if (req.method === 'GET' && path === '/api/health') return json(res, 200, { ok: true, configured });
+      await ensureFreshToken();
       if (req.method === 'GET' && path === '/api/session') {
         return json(res, 200, { configured, user: session?.tokenExpires > Date.now() ? session.user : null, csrf: session?.csrf || null, inviteBase: configured ? `https://discord.com/oauth2/authorize?${new URLSearchParams({ client_id: env.DISCORD_CLIENT_ID, scope: 'bot', permissions: '268435472' })}` : null });
       }
