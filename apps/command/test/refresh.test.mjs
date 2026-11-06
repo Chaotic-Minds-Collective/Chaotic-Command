@@ -91,7 +91,11 @@ for (const failure of ['network', 'server', 'malformed', 'other']) {
       return json({ error: failure === 'server' ? 'invalid_grant' : 'invalid_client' }, failure === 'server' ? 503 : 400);
     });
     for (let i = 0; i < 2; i++) assert.ok((await (await f.request('/api/session')).json()).user);
-    assert.equal(attempts, 2);
+    assert.equal(attempts, 1);
+    const now = Date.now;
+    t.mock.method(Date, 'now', () => now() + 31000);
+    assert.ok((await (await f.request('/api/session')).json()).user);
+    assert.equal(attempts, 2, 'refresh retries after the cooldown');
   });
 }
 
@@ -104,25 +108,26 @@ test('public assets and health do not attempt refresh', async t => {
   assert.equal(attempts, 0);
 });
 
-for (const rejected of [true, false]) {
-  test(`a late ${rejected ? 'rejected' : 'successful'} refresh preserves concurrent rotation`, async t => {
-    const started = Promise.withResolvers(), delayed = Promise.withResolvers();
-    let attempts = 0;
-    const f = await signIn(t, token => {
-      attempts++;
-      if (attempts === 1) { started.resolve(); return delayed.promise; }
-      assert.equal(token, attempts === 2 ? 'refresh-1' : 'refresh-2');
-      return json({ access_token: 'short-token', expires_in: 1200, refresh_token: 'refresh-2' });
-    });
-    const pending = f.request('/api/session');
-    await started.promise;
-    await f.request('/api/session');
-    delayed.resolve(rejected ? json({ error: 'invalid_grant' }, 400) : json({ access_token: 'stale-token', expires_in: 1200, refresh_token: 'stale-refresh' }));
-    await pending;
-    assert.equal((await f.request('/api/guilds')).status, 200);
-    assert.equal(attempts, 3);
+test('concurrent requests share a refresh and use the rotated token next time', async t => {
+  const started = Promise.withResolvers(), delayed = Promise.withResolvers();
+  const tokens = [];
+  const f = await signIn(t, token => {
+    tokens.push(token);
+    if (tokens.length === 1) { started.resolve(); return delayed.promise; }
+    return json({ access_token: 'short-token', expires_in: 1200, refresh_token: 'refresh-3' });
   });
-}
+  const pending = f.request('/api/session');
+  await started.promise;
+  const concurrent = f.request('/api/session');
+  // A public request ensures the server has handled the queued concurrent request.
+  await f.request('/api/health');
+  assert.equal(tokens.length, 1);
+  delayed.resolve(json({ access_token: 'short-token', expires_in: 1200, refresh_token: 'refresh-2' }));
+  assert.ok((await (await pending).json()).user);
+  assert.ok((await (await concurrent).json()).user);
+  assert.equal((await f.request('/api/guilds')).status, 200);
+  assert.deepEqual(tokens, ['refresh-1', 'refresh-2']);
+});
 
 test('an in-flight refresh cannot restore a logged-out session', async t => {
   const started = Promise.withResolvers(), delayed = Promise.withResolvers();
@@ -140,5 +145,19 @@ test('an in-flight refresh cannot restore a logged-out session', async t => {
   delayed.resolve(json({ access_token: 'fresh-token', expires_in: 604800, refresh_token: 'refresh-2' }));
   assert.equal((await (await pending).json()).user, null);
   assert.equal((await (await f.request('/api/session')).json()).user, null);
-  assert.equal(attempts, 3);
+  assert.equal(attempts, 2);
+});
+
+test('sign-in bypasses a pending refresh and logout still requires CSRF', async t => {
+  const started = Promise.withResolvers(), delayed = Promise.withResolvers();
+  const f = await signIn(t, () => { started.resolve(); return delayed.promise; });
+  const pending = f.request('/api/session');
+  await started.promise;
+  try {
+    assert.equal((await fetch(`${f.url}/auth/discord`, { redirect: 'manual', headers: f.headers })).status, 302);
+    assert.equal((await fetch(`${f.url}/api/logout`, { method: 'POST', headers: { ...f.headers, Origin: 'http://localhost:3000' } })).status, 403);
+  } finally {
+    delayed.resolve(json({ error: 'temporary' }, 503));
+    await pending;
+  }
 });
