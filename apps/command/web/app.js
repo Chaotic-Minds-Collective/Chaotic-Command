@@ -43,8 +43,19 @@ function customStructure() {
   if (!categories.length) throw new Error('Add at least one category using the Category | channel-one, channel-two format.');
   return { roles, categories };
 }
+function safeInviteHref(base, guildId) {
+  if (!/^\d{17,20}$/.test(String(guildId))) return null;
+  let url;
+  try { url = new URL(base); } catch { return null; }
+  if (url.protocol !== 'https:' || url.hostname !== 'discord.com' || url.pathname !== '/oauth2/authorize' || url.username || url.password || url.port) return null;
+  url.searchParams.set('guild_id', String(guildId));
+  url.searchParams.set('disable_guild_select', 'true');
+  return url.href;
+}
 function updateInviteLink() {
-  if (selected && window.commandInviteBase) $('invite').href = `${window.commandInviteBase}&guild_id=${selected}&disable_guild_select=true`;
+  const href = selected && window.commandInviteBase ? safeInviteHref(window.commandInviteBase, selected) : null;
+  if (href) $('invite').href = href;
+  else $('invite').removeAttribute('href');
 }
 async function refreshBots() {
   const data = await api('/api/bots');
@@ -226,13 +237,15 @@ async function loadServer() {
   try {
     const status = await api(`/api/guilds/${selected}/status`);
     $('status').textContent = `Bot ready. ${status.channels} channels and ${status.roles} roles on this server.`;
-    $('invite').href = status.inviteUrl;
+    const inviteHref = safeInviteHref(status.inviteUrl, selected);
+    if (inviteHref) $('invite').href = inviteHref;
+    else $('invite').removeAttribute('href');
     message('Ready. Preview a template before making changes.');
   } catch (error) {
     $('status').textContent = error.message;
     message('Bot not ready. Use the installation link below, then reselect this server.');
     // Public invite endpoint is provided by the session response, not derived from secrets.
-    if (window.commandInviteBase) $('invite').href = `${window.commandInviteBase}&guild_id=${selected}&disable_guild_select=true`;
+    updateInviteLink();
   }
 }
 /**
