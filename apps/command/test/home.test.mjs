@@ -48,6 +48,7 @@ function fixture() {
 test('homepage exposes related tabs and focusable panels, excluding Documentation from the tablist', () => {
   const { tabs, panels, selected } = fixture();
   assert.equal(tabs.length, 5);
+  assert.equal(panels.length, tabs.length);
   selected(0);
   tabs.forEach((tab, i) => {
     assert.equal(tab.attributes.role, 'tab');
