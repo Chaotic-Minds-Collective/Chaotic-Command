@@ -192,6 +192,11 @@ function handleMessage(raw) {
 
   if (message.op === 10) {
     const interval = Number(message.d.heartbeat_interval);
+    if (!Number.isFinite(interval) || interval < 1000 || interval > 120000) {
+      log('warn', 'Invalid Discord heartbeat interval; reconnecting');
+      scheduleReconnect('invalid heartbeat interval');
+      return;
+    }
     heartbeatTimer = setInterval(heartbeat, interval);
     if (sessionId && sequence !== null) resume();
     else identify();
@@ -226,10 +231,27 @@ function handleMessage(raw) {
 }
 
 /** Open a Gateway socket and attach message, error, and reconnect handlers. */
+function gatewayUrl() {
+  if (!resumeGatewayUrl) return DISCORD_GATEWAY;
+  try {
+    const url = new URL(resumeGatewayUrl);
+    if (url.protocol !== 'wss:' || url.hostname !== 'gateway.discord.gg' || url.username || url.password || url.port) throw new Error('unexpected Gateway URL');
+    url.pathname = '/';
+    url.search = '';
+    url.searchParams.set('v', '10');
+    url.searchParams.set('encoding', 'json');
+    return url.href;
+  } catch {
+    log('warn', 'Invalid Discord resume Gateway URL; using the standard endpoint');
+    resumeGatewayUrl = null;
+    return DISCORD_GATEWAY;
+  }
+}
+
 function connect() {
   if (shuttingDown) return;
   clearTimers();
-  const url = resumeGatewayUrl ? `${resumeGatewayUrl}/?v=10&encoding=json` : DISCORD_GATEWAY;
+  const url = gatewayUrl();
   socket = new WebSocket(url);
 
   socket.addEventListener('open', () => log('info', 'Gateway connection opened'));
