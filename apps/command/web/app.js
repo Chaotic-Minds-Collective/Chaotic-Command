@@ -10,8 +10,11 @@ async function api(path, body) {
   return data;
 }
 function message(text) { $('message').textContent = text; }
+/** Return the string value with HTML metacharacters escaped for text or quoted attributes. */
 function esc(text) { return String(text).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+/** Discard the pending plan, hide its preview, and clear the confirmation and apply results. */
 function clearPlan() { plan = null; $('plan').hidden = true; $('confirmation').value = ''; $('result').innerHTML = ''; }
+/** Hide the audit report and remove its contents. */
 function clearAudit() {
   $('audit-report').hidden = true;
   $('audit-report').innerHTML = '';
@@ -232,6 +235,10 @@ async function loadServer() {
     if (window.commandInviteBase) $('invite').href = `${window.commandInviteBase}&guild_id=${selected}&disable_guild_select=true`;
   }
 }
+/**
+ * Fetch and display a read-only audit of the selected server, including review findings and inventory.
+ * Selection, request, and rendering errors are caught by run and shown in the status message.
+ */
 $('audit').onclick = () => run(async () => {
   requireGuild();
   const audit = await api(`/api/guilds/${selected}/audit`);
@@ -312,6 +319,12 @@ $('preview').onclick = () => run(async () => {
   $('confirm-label').textContent = `Type APPLY ${selected} to confirm creating the listed objects in ${$('guild').selectedOptions[0].textContent}.`;
   $('plan').hidden = false; message('Preview ready. No Discord changes have been made.');
 });
+/**
+ * Apply the unexpired preview after exact typed confirmation and approval of the browser prompt.
+ * Consume the local plan before requesting changes, then display completed items and any partial failure.
+ * Cancellation preserves the plan; an expired preview clears it. Validation, request, and rendering
+ * errors are caught by run and shown in the status message.
+ */
 $('apply').onclick = () => run(async () => {
   requireGuild();
   if (!plan || Date.now() >= plan.expires) { clearPlan(); throw new Error('Preview expired. Preview again.'); }
