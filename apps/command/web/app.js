@@ -10,10 +10,11 @@ async function api(path, body) {
   return data;
 }
 function message(text) { $('message').textContent = text; }
-function clearPlan() { plan = null; $('plan').hidden = true; $('confirmation').value = ''; $('result').textContent = ''; }
+function esc(text) { return String(text).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function clearPlan() { plan = null; $('plan').hidden = true; $('confirmation').value = ''; $('result').innerHTML = ''; }
 function clearAudit() {
   $('audit-report').hidden = true;
-  $('audit-report').textContent = '';
+  $('audit-report').innerHTML = '';
 }
 function controls(disabled) { document.querySelectorAll('button, select, input, textarea').forEach(el => { el.disabled = disabled; }); }
 async function run(action) {
@@ -234,26 +235,21 @@ async function loadServer() {
 $('audit').onclick = () => run(async () => {
   requireGuild();
   const audit = await api(`/api/guilds/${selected}/audit`);
-  const lines = [
-    `Inventory: ${audit.summary.roleCount} roles, ${audit.summary.categoryCount} categories, ${audit.summary.channelCount} channels (${audit.summary.textChannelCount} text, ${audit.summary.voiceChannelCount} voice).`,
-    '',
-    'Findings:',
-    ...audit.findings.map(item => `[${item.severity.toUpperCase()}] ${item.message}`),
-    '',
-    'Role review:',
-    ...audit.roles.map(role => `- ${role.name}: ${role.permissionFlags.length ? role.permissionFlags.join(', ') : 'No recognized permissions'}${role.elevatedPermissions ? ' [REVIEW elevated or unrecognized permissions]' : ''}${role.managed ? ' [managed by integration]' : ''}`),
-    '',
-    'Category layout:',
-    ...audit.categories.map(category => `- ${category.name}: ${category.channels.length ? category.channels.map(channel => `${channel.name} (${channel.type}${channel.permissionOverwriteCount ? `, ${channel.permissionOverwriteCount} custom overwrites` : ''})`).join(', ') : 'No channels'}`),
-    '',
-    'Channels outside categories:',
-    ...(audit.uncategorizedChannels.length
-      ? audit.uncategorizedChannels.map(channel => `- ${channel.name} (${channel.type}${channel.permissionOverwriteCount ? `, ${channel.permissionOverwriteCount} custom overwrites` : ''})`)
-      : ['None detected.']),
-    '',
-    audit.scopeNote
-  ];
-  $('audit-report').textContent = lines.join('\n');
+  const findingsHtml = audit.findings.length
+    ? `<ul class="findings">${audit.findings.map(item => `<li class="sev-${esc(item.severity)}"><span class="sev-badge">${esc(item.severity.toUpperCase())}</span> ${esc(item.message)}</li>`).join('')}</ul>`
+    : '<p class="report-empty">No findings. The server structure looks clean.</p>';
+  const rolesHtml = audit.roles.map(role => `<li><b>${esc(role.name)}</b>${role.elevatedPermissions ? ' <span class="badge badge-warn">REVIEW</span>' : ''}${role.managed ? ' <span class="badge badge-quiet">managed</span>' : ''}<span class="perm-list">${role.permissionFlags.length ? esc(role.permissionFlags.join(', ')) : 'No recognized permissions'}</span></li>`).join('');
+  const catsHtml = audit.categories.map(category => `<li><b>${esc(category.name)}</b>${category.channels.length ? `<ul>${category.channels.map(channel => `<li>${esc(channel.name)} <span class="badge badge-quiet">${esc(channel.type)}</span>${channel.permissionOverwriteCount ? ` <span class="badge badge-quiet">${channel.permissionOverwriteCount} overwrites</span>` : ''}</li>`).join('')}</ul>` : ' <span class="badge badge-quiet">No channels</span>'}</li>`).join('');
+  const uncatHtml = audit.uncategorizedChannels.length
+    ? `<ul>${audit.uncategorizedChannels.map(channel => `<li>${esc(channel.name)} <span class="badge badge-quiet">${esc(channel.type)}</span></li>`).join('')}</ul>`
+    : '<p class="report-empty">None detected.</p>';
+  $('audit-report').innerHTML = `
+    <p class="audit-summary">${audit.summary.roleCount} roles · ${audit.summary.categoryCount} categories · ${audit.summary.channelCount} channels (${audit.summary.textChannelCount} text, ${audit.summary.voiceChannelCount} voice)</p>
+    <h3>Findings</h3>${findingsHtml}
+    <h3>Role review</h3><ul class="report-list">${rolesHtml}</ul>
+    <h3>Category layout</h3><ul class="cat-list">${catsHtml}</ul>
+    <h3>Channels outside categories</h3>${uncatHtml}
+    <p class="scope-note">${esc(audit.scopeNote)}</p>`;
   $('audit-report').hidden = false;
   message('Read-only audit complete. No Discord changes have been made.');
 });
@@ -323,7 +319,9 @@ $('apply').onclick = () => run(async () => {
   if (!window.confirm('Create the listed roles and channels in the selected Discord server? This cannot be automatically undone.')) { message('Setup cancelled.'); return; }
   const pending = plan; plan = null; $('plan').hidden = true;
   const result = await api(`/api/guilds/${selected}/apply`, { nonce: pending.nonce, confirm: $('confirmation').value });
-  $('result').textContent = result.completed.map(step => `${step.action}: ${step.kind} ${step.name} (${step.id})`).join('\n');
+  $('result').innerHTML = result.completed.length
+    ? `<ul class="steps-done">${result.completed.map(step => `<li><span class="badge badge-ok">${esc(step.action)}</span> <b>${esc(step.kind)}</b> ${esc(step.name)} <span class="step-id">id ${esc(String(step.id))}</span></li>`).join('')}</ul>`
+    : '<p class="report-empty">Nothing was created.</p>';
   message(result.error ? `Partially completed: ${result.error} Preview again to reuse completed work.` : 'Setup complete. Changes are now in Discord.');
 });
 $('load-saved-structure').onclick = () => run(loadSavedStructure);
