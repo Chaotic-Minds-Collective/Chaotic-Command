@@ -6,6 +6,11 @@ import { runInNewContext } from 'node:vm';
 const html = readFileSync(new URL('../web/home.html', import.meta.url), 'utf8');
 const script = readFileSync(new URL('../web/home.js', import.meta.url), 'utf8');
 
+/**
+ * Run the homepage with a minimal DOM and optional session response.
+ * @param {{ user: object | null }} [session] Mock API response; omission disables fetch and location.
+ * @returns {object} Tab controls, selection assertions, and focus and redirect observers.
+ */
 function fixture(session) {
   let focused;
   let replaced;
