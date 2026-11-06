@@ -49,8 +49,7 @@ function toPgPlaceholders(sql) {
 }
 
 const SCHEMA = {
-  sqlite: `PRAGMA journal_mode=WAL;
-CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, data TEXT NOT NULL, expires INTEGER NOT NULL);
+  sqlite: `CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, data TEXT NOT NULL, expires INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS notes (guild TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS saved_structures (id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, name TEXT NOT NULL, structure_json TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
 CREATE UNIQUE INDEX IF NOT EXISTS saved_structures_owner_name ON saved_structures(owner_id, name COLLATE NOCASE);
@@ -83,17 +82,37 @@ function sqliteAdapter(db, filename) {
     },
     exec: async sql => { db.exec(sql); },
     query: async (sql, params = []) => db.prepare(sql).all(...params),
-    migrate: async () => { db.exec(SCHEMA.sqlite); await runMigrations(self, sqliteMigrationExecutor(db)); },
+    migrate: async () => {
+      // Yield between busy attempts so another connection can finish its transaction.
+      await sqliteRetry(() => db.exec('PRAGMA journal_mode=WAL'));
+      await sqliteRetry(() => db.exec('BEGIN IMMEDIATE'));
+      try {
+        db.exec(SCHEMA.sqlite);
+        await runMigrations(self, async sql => db.exec(sql));
+        db.exec('COMMIT');
+      } catch (error) {
+        try { db.exec('ROLLBACK'); } catch { /* Preserve the migration error. */ }
+        throw error;
+      }
+    },
     close: async () => { db.close(); }
   };
   return self;
 }
 
-async function postgresAdapter(connectionString) {
+async function postgresAdapter(connectionString, ca) {
   const pgModule = await import('pg');
   const Pool = pgModule.default.Pool ?? pgModule.default;
-  const needsSsl = !/localhost|127\.0\.0\.1/.test(connectionString) && !/sslmode=disable/.test(connectionString);
-  const pool = new Pool({ connectionString, max: 5, ...(needsSsl ? { ssl: { rejectUnauthorized: false } } : {}) });
+  // Parse once using the driver's own rules, then omit connectionString so it
+  // cannot overwrite our TLS defaults (or an explicitly supplied CA).
+  const parameters = new pgModule.default.Client({ connectionString }).connectionParameters;
+  const local = ['localhost', '127.0.0.1', '::1', '[::1]'].includes(parameters.host) || parameters.host.startsWith('/');
+  const url = new URL(connectionString);
+  const explicitSsl = ['ssl', 'sslmode', 'sslcert', 'sslkey', 'sslrootcert'].some(key => url.searchParams.has(key));
+  let ssl = parameters.ssl;
+  if (!explicitSsl && !ssl && !local) ssl = { rejectUnauthorized: true };
+  if (ssl && ca) ssl = { ...(typeof ssl === 'object' ? ssl : {}), ca };
+  const pool = new Pool({ ...parameters, max: 5, ssl });
   const cache = new Map();
   const self = {
     kind: 'postgres',
@@ -114,22 +133,37 @@ async function postgresAdapter(connectionString) {
     },
     exec: async sql => { await pool.query(translatePostgres(sql)); },
     query: async (sql, params = []) => (await pool.query(toPgPlaceholders(translatePostgres(sql)), params)).rows,
-    migrate: async () => { await pool.query(SCHEMA.postgres); await runMigrations(self, async sql => { await pool.query(sql); }); },
+    migrate: async () => {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query('SELECT pg_advisory_xact_lock(1735289201)');
+        await client.query(SCHEMA.postgres);
+        await runMigrations({ query: async sql => (await client.query(sql)).rows }, async sql => { await client.query(sql); });
+        await client.query('COMMIT');
+      } catch (error) {
+        try { await client.query('ROLLBACK'); } catch { /* Preserve the migration error. */ }
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
     close: async () => { await pool.end(); }
   };
   return self;
 }
 
-function sqliteMigrationExecutor(db) {
-  return async sql => db.exec(sql);
+async function sqliteRetry(operation) {
+  const deadline = Date.now() + 5000;
+  for (;;) {
+    try { return operation(); } catch (error) {
+      if (error.errcode !== 5 || Date.now() >= deadline) throw error;
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+  }
 }
 
-/**
- * Apply unrecorded .sql files in filename order and record each successful file
- * with its application time in Unix epoch milliseconds. Files are identified by
- * name; execution and recording are not wrapped in a transaction here. File and
- * database errors propagate, so a failed migration may leave partial changes.
- */
+/** Apply and record pending files inside the caller's serialized transaction. */
 async function runMigrations(adapter, executeSql) {
   await executeSql(`CREATE TABLE IF NOT EXISTS schema_migrations (name TEXT PRIMARY KEY, applied_at BIGINT NOT NULL)`);
   const applied = new Set((await adapter.query('SELECT name FROM schema_migrations')).map(row => row.name));
@@ -146,8 +180,9 @@ async function runMigrations(adapter, executeSql) {
  * env defaults to process.env. A truthy env.DATABASE_URL selects PostgreSQL;
  * otherwise SQLite uses dbPath, or command.sqlite under env.DATA_DIR (default
  * .data). Use ':memory:' for in-memory SQLite. dbPath is ignored for PostgreSQL.
- * The PostgreSQL pool is configured with certificate verification disabled unless
- * the connection string contains localhost, 127.0.0.1, or sslmode=disable.
+ * Remote PostgreSQL uses verified TLS by default; loopback/socket hosts use driver
+ * defaults. Explicit URL SSL settings are honored. env.DATABASE_SSL_CA supplies
+ * optional PEM CA text without being overwritten by URL SSL parameters.
  *
  * The returned adapter exposes kind, prepare(sql), exec(sql), query(sql, params),
  * migrate(), and close(). SQLite adapters also expose filename. Prepared get/all/run
@@ -158,18 +193,23 @@ async function runMigrations(adapter, executeSql) {
  * `?`, even inside literals, and translate only supported SQLite syntax.
  *
  * Opening or migrating can reject with driver, filesystem, or SQL errors; migration
- * failures may leave partial changes. prepare can throw synchronously, and execution
+ * failures roll back schema changes and close the adapter. prepare can throw synchronously, and execution
  * and close errors propagate through their returned promises.
  */
 export async function openDb({ env = process.env, dbPath } = {}) {
   const databaseUrl = env.DATABASE_URL;
-  const db = databaseUrl ? await postgresAdapter(databaseUrl) : await sqliteAdapterFor(dbPath, env);
-  await db.migrate();
-  return db;
+  const db = databaseUrl ? await postgresAdapter(databaseUrl, env.DATABASE_SSL_CA) : await sqliteAdapterFor(dbPath, env);
+  try {
+    await db.migrate();
+    return db;
+  } catch (error) {
+    try { await db.close(); } catch { /* Preserve the migration error. */ }
+    throw error;
+  }
 }
 
 async function sqliteAdapterFor(dbPath, env) {
   const path = dbPath ?? resolve(env.DATA_DIR || '.data', 'command.sqlite');
   if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
-  return sqliteAdapter(new DatabaseSync(path), path);
+  return sqliteAdapter(new DatabaseSync(path, { timeout: 0 }), path);
 }

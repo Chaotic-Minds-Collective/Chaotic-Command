@@ -1,3 +1,7 @@
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:dcbea34f0aa8477f5dba30f9afdd36b6e676851b37341f7d7532aac5510f1263 -->
+
 # Chaotic Command persistence
 
 ## Drivers
@@ -6,6 +10,8 @@
 
 - `DATABASE_URL` is set: PostgreSQL (Supabase) via the `pg` library, with a small connection pool (max 5).
 - Otherwise: local SQLite via Node's built-in `node:sqlite` (development default, `$0`).
+
+Remote PostgreSQL connections use certificate verification by default. Only exact loopback hosts (`localhost`, `127.0.0.1`, `::1`) and Unix sockets use driver defaults. Explicit connection URL SSL options (including `sslmode=disable`) are honored; prefer `sslmode=verify-full` for remote databases. Set `DATABASE_SSL_CA` to PEM CA text when a private CA is required. This CA is retained even when the URL contains SSL parameters.
 
 Both adapters expose the same async API (`prepare().get/all/run`, `exec`, `query`, `migrate`, `close`), so application code never branches on the driver.
 
@@ -17,6 +23,8 @@ SQL compatibility notes:
 ## Migrations
 
 Numbered `.sql` files live in `apps/command/db/migrations/` and run in filename order. Applied migrations are recorded in `schema_migrations`, so files must never be edited after release - add a new numbered file instead.
+
+Base schema creation, pending-file checks, SQL execution, and migration recording share one transaction. PostgreSQL uses one checked-out client and a transaction advisory lock; SQLite enables WAL before `BEGIN IMMEDIATE` and retries busy acquisition asynchronously for up to five seconds. A failed batch rolls back all changes from that batch, and failed startup closes the adapter. Migration files must contain transaction-compatible SQL and must not manage their own transactions.
 
 Run manually:
 
@@ -56,3 +64,5 @@ The web dashboard and the Discord bot can point at the same `DATABASE_URL`. Rule
 
 - `DATABASE_URL`, `DISCORD_BOT_TOKEN`, `SESSION_SECRET`, `DISCORD_CLIENT_SECRET` are secrets: environment variables only, never in git, logs, or PRs.
 - Use placeholders like `<DATABASE_URL>` in docs and issues.
+
+<!-- /coderabbit-ai-generated:v1 -->
