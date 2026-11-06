@@ -145,6 +145,13 @@ export function createApp(config = {}) {
       try { if (row) session = decrypt(row.data); } catch { deleteSession(sid); }
     }
     const persist = () => { if (sid && session) saveSession(sid, session); };
+    // Apply only this handler's changes to the current session after asynchronous work.
+    const persistChanges = changes => {
+      const row = db.prepare('SELECT data FROM sessions WHERE id = ? AND expires > ?').get(sessionKey(sid), Date.now());
+      if (!row) throw new HttpError(401, 'Session expired. Sign in again.');
+      session = { ...decrypt(row.data), ...changes };
+      persist();
+    };
     /** Silently renew an expiring Discord access token, sharing work across requests. */
     const ensureFreshToken = async () => {
       if (!session?.user || !session.refresh || session.tokenExpires > Date.now() + 30 * 60000) return;
@@ -155,6 +162,7 @@ export function createApp(config = {}) {
         session = row ? decrypt(row.data) : null;
       };
       if (refreshes.has(refreshKey)) {
+        config.onRefreshWait?.();
         await refreshes.get(refreshKey);
         reloadSession();
         return;
@@ -188,6 +196,7 @@ export function createApp(config = {}) {
           if (token.refresh_token) session.refresh = token.refresh_token;
           session.expires = Date.now() + 30 * DAY;
           persist();
+          res.setHeader('Set-Cookie', cookie(sid, 30 * DAY / 1000));
         } catch (error) { console.warn(`[oauth] token refresh could not be reached: ${error?.message || error}`); }
       })();
       refreshes.set(refreshKey, refresh);
@@ -289,7 +298,7 @@ export function createApp(config = {}) {
           if (String(error).includes('UNIQUE')) throw new HttpError(409, 'That Discord bot is already connected to your account.');
           throw error;
         }
-        session.selectedBotId = id; persist();
+        persistChanges({ selectedBotId: id });
         return json(res, 201, { bot: { id, discordBotId: identity.id, username: identity.username, createdAt: now }, selectedBotId: id });
       }
       if (path === '/api/bots/select' && req.method === 'POST') {
@@ -298,7 +307,7 @@ export function createApp(config = {}) {
         if (data.id === null && sharedBotConfigured) delete session.selectedBotId;
         else if (typeof data.id === 'string' && db.prepare('SELECT 1 FROM user_bots WHERE id = ? AND owner_id = ?').get(data.id, session.user.id)) session.selectedBotId = data.id;
         else throw new HttpError(404, 'Connected bot not found or not available.');
-        persist();
+        persistChanges({ selectedBotId: session.selectedBotId });
         return json(res, 200, { selectedBotId: session.selectedBotId || 'shared' });
       }
       const connectedBot = /^\/api\/bots\/([a-f0-9]{32})\/delete$/.exec(path);
@@ -308,8 +317,7 @@ export function createApp(config = {}) {
         if (!row) throw new HttpError(404, 'Connected bot not found.');
         db.prepare('DELETE FROM user_bots WHERE id = ? AND owner_id = ?').run(id, session.user.id);
         db.prepare('DELETE FROM guild_bot_selections WHERE owner_id = ? AND bot_id = ?').run(session.user.id, id);
-        if (session.selectedBotId === id) delete session.selectedBotId;
-        persist();
+        if (session.selectedBotId === id) persistChanges({ selectedBotId: undefined });
         return json(res, 200, { ok: true });
       }
       const guildBotMatch = /^\/api\/guilds\/(\d{17,20})\/bot$/.exec(path);
@@ -428,7 +436,7 @@ export function createApp(config = {}) {
         const requested = hasTemplate ? data.templateId : data.structure;
         const plan = makePlan(requested, state.roles, state.channels);
         session.preview = { id, botId: state.bot.id, discordBotId: state.bot.discordBotId, plan, nonce: random(), expires: Date.now() + 5 * 60000 };
-        persist(); return json(res, 200, { ...plan, nonce: session.preview.nonce, expires: session.preview.expires });
+        persistChanges({ preview: session.preview }); return json(res, 200, { ...plan, nonce: session.preview.nonce, expires: session.preview.expires });
       }
       if (action === 'apply') {
         const result = await lock(id, async () => {
@@ -438,7 +446,7 @@ export function createApp(config = {}) {
           session = decrypt(stored.data);
           const pending = session.preview;
           if (!pending || pending.id !== id || pending.expires < Date.now() || !equal(data.nonce, pending.nonce) || data.confirm !== `APPLY ${id}`) throw new HttpError(409, 'Preview expired or confirmation does not match. Preview again.');
-          delete session.preview; persist();
+          persistChanges({ preview: undefined });
           const chosen = selectedBot(session, id);
           if (pending.botId !== chosen.id || pending.discordBotId !== chosen.discordBotId) throw new HttpError(409, 'Selected bot changed. Review a fresh preview.');
           const state = await snapshot(session, id, chosen);

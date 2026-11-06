@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createApp } from '../server.mjs';
 
-async function fixture(t, fetcher) {
+async function fixture(t, fetcher, config = {}) {
   const app = createApp({
     env: {
       APP_ORIGIN: 'http://localhost:3000',
@@ -11,7 +11,7 @@ async function fixture(t, fetcher) {
       DISCORD_BOT_TOKEN: 'private-bot-token',
       SESSION_SECRET: 'test-session-secret-at-least-32-characters'
     },
-    dbPath: ':memory:', fetch: fetcher
+    ...config, dbPath: ':memory:', fetch: fetcher
   });
   await new Promise(r => app.server.listen(0, '127.0.0.1', r));
   t.after(() => app.close());
@@ -43,13 +43,14 @@ test('sessions about to expire refresh silently with the stored refresh token', 
   assert.equal(callback.status, 302);
   const cookie = callback.headers.get('set-cookie').split(';')[0];
   const session = await fetch(`${url}/api/session`, { headers: { Cookie: cookie } });
+  assert.match(session.headers.get('set-cookie'), /Max-Age=2592000(?:;|$)/);
   assert.ok((await session.json()).user, 'a session inside the refresh window silently renews its token');
   const guilds = await fetch(`${url}/api/guilds`, { headers: { Cookie: cookie } });
   assert.equal(guilds.status, 200, 'API calls work with the refreshed token');
   assert.equal((await guilds.json()).guilds[0].id, guildId);
 });
 
-async function signIn(t, refresh) {
+async function signIn(t, refresh, config = {}) {
   const url = await fixture(t, async (input, options = {}) => {
     const path = new URL(input).pathname;
     if (path.endsWith('/oauth2/token')) {
@@ -62,7 +63,7 @@ async function signIn(t, refresh) {
       return json([]);
     }
     throw new Error(`Unexpected path: ${path}`);
-  });
+  }, config);
   const start = await fetch(`${url}/auth/discord`, { redirect: 'manual' });
   const state = new URL(start.headers.get('location')).searchParams.get('state');
   const callback = await fetch(`${url}/auth/callback?state=${state}&code=test-code`, {
@@ -109,18 +110,18 @@ test('public assets and health do not attempt refresh', async t => {
 });
 
 test('concurrent requests share a refresh and use the rotated token next time', async t => {
+  const joined = Promise.withResolvers();
   const started = Promise.withResolvers(), delayed = Promise.withResolvers();
   const tokens = [];
   const f = await signIn(t, token => {
     tokens.push(token);
     if (tokens.length === 1) { started.resolve(); return delayed.promise; }
     return json({ access_token: 'short-token', expires_in: 1200, refresh_token: 'refresh-3' });
-  });
+  }, { onRefreshWait: () => joined.resolve() });
   const pending = f.request('/api/session');
   await started.promise;
   const concurrent = f.request('/api/session');
-  // A public request ensures the server has handled the queued concurrent request.
-  await f.request('/api/health');
+  await joined.promise;
   assert.equal(tokens.length, 1);
   delayed.resolve(json({ access_token: 'short-token', expires_in: 1200, refresh_token: 'refresh-2' }));
   assert.ok((await (await pending).json()).user);
@@ -143,7 +144,9 @@ test('an in-flight refresh cannot restore a logged-out session', async t => {
   const logout = await fetch(`${f.url}/api/logout`, { method: 'POST', headers: { ...f.headers, Origin: 'http://localhost:3000', 'x-csrf-token': csrf } });
   assert.equal(logout.status, 200);
   delayed.resolve(json({ access_token: 'fresh-token', expires_in: 604800, refresh_token: 'refresh-2' }));
-  assert.equal((await (await pending).json()).user, null);
+  const refreshed = await pending;
+  assert.equal(refreshed.headers.get('set-cookie'), null, 'logout is not followed by a renewed cookie');
+  assert.equal((await refreshed.json()).user, null);
   assert.equal((await (await f.request('/api/session')).json()).user, null);
   assert.equal(attempts, 2);
 });
@@ -160,4 +163,87 @@ test('sign-in bypasses a pending refresh and logout still requires CSRF', async 
     delayed.resolve(json({ error: 'temporary' }, 503));
     await pending;
   }
+});
+
+for (const concurrentAction of ['refresh', 'logout', 'sign-in']) {
+  test(`a delayed bot connection preserves a concurrent ${concurrentAction}`, { timeout: 10000 }, async t => {
+    const started = Promise.withResolvers(), delayed = Promise.withResolvers();
+    const now = Date.now();
+    let tokenUsed;
+    const url = await fixture(t, async (input, options = {}) => {
+      const path = new URL(input).pathname;
+      if (path.endsWith('/oauth2/token')) {
+        return options.body.get('grant_type') === 'refresh_token'
+          ? json({ access_token: 'fresh-token', expires_in: 60 * 86400, refresh_token: 'refresh-2' })
+          : json({ access_token: 'initial-token', expires_in: 3600, refresh_token: 'refresh-1' });
+      }
+      if (path.endsWith('/users/@me')) {
+        if (options.headers.Authorization.startsWith('Bot ')) {
+          started.resolve();
+          await delayed.promise;
+          return json({ id: '555555555555555555', username: 'test-bot', bot: true });
+        }
+        return json({ id: '444444444444444444', username: 'test-user' });
+      }
+      if (path.endsWith('/users/@me/guilds')) {
+        tokenUsed = options.headers.Authorization;
+        return json([]);
+      }
+      throw new Error(`Unexpected path: ${path}`);
+    });
+    const login = async headers => {
+      const start = await fetch(`${url}/auth/discord`, { redirect: 'manual', headers });
+      const state = new URL(start.headers.get('location')).searchParams.get('state');
+      return fetch(`${url}/auth/callback?state=${state}&code=test`, {
+        redirect: 'manual', headers: { Cookie: start.headers.get('set-cookie').split(';')[0] }
+      });
+    };
+    const callback = await login();
+    const headers = { Cookie: callback.headers.get('set-cookie').split(';')[0] };
+    const csrf = (await (await fetch(`${url}/api/session`, { headers })).json()).csrf;
+    const pending = fetch(`${url}/api/bots`, { method: 'POST', headers: { ...headers, Origin: 'http://localhost:3000', 'x-csrf-token': csrf }, body: JSON.stringify({ token: 'synthetic-bot-token-long-enough' }) });
+    await started.promise;
+    try {
+      if (concurrentAction === 'refresh') {
+        t.mock.method(Date, 'now', () => now + 31 * 60000);
+        assert.equal((await fetch(`${url}/api/session`, { headers })).status, 200);
+      } else if (concurrentAction === 'logout') {
+        assert.equal((await fetch(`${url}/api/logout`, { method: 'POST', headers: { ...headers, Origin: 'http://localhost:3000', 'x-csrf-token': csrf } })).status, 200);
+      } else {
+        assert.equal((await login(headers)).status, 302);
+      }
+    } finally { delayed.resolve(); }
+    const result = await pending;
+    assert.equal(result.status, concurrentAction === 'refresh' ? 201 : 401);
+    if (concurrentAction === 'refresh') {
+      const selected = (await result.json()).selectedBotId;
+      assert.equal((await (await fetch(`${url}/api/bots`, { headers })).json()).selectedBotId, selected);
+      assert.equal((await fetch(`${url}/api/guilds`, { headers })).status, 200);
+      assert.equal(tokenUsed, 'Bearer fresh-token');
+      t.mock.method(Date, 'now', () => now + 30 * 86400000 + 15 * 60000);
+      assert.ok((await (await fetch(`${url}/api/session`, { headers })).json()).user, 'the renewed stored expiry survives the bot write');
+    } else {
+      assert.equal((await (await fetch(`${url}/api/session`, { headers })).json()).user, null);
+    }
+  });
+}
+
+
+test('a delayed refresh does not replace the cookie from a newer sign-in', { timeout: 10000 }, async t => {
+  const started = Promise.withResolvers(), delayed = Promise.withResolvers();
+  const f = await signIn(t, () => { started.resolve(); return delayed.promise; });
+  const pending = f.request('/api/session');
+  await started.promise;
+  try {
+    const start = await fetch(`${f.url}/auth/discord`, { redirect: 'manual', headers: f.headers });
+    const state = new URL(start.headers.get('location')).searchParams.get('state');
+    const callback = await fetch(`${f.url}/auth/callback?state=${state}&code=new-sign-in`, { redirect: 'manual', headers: f.headers });
+    assert.equal(callback.status, 302);
+    assert.notEqual(callback.headers.get('set-cookie').split(';')[0], f.headers.Cookie);
+  } finally {
+    delayed.resolve(json({ access_token: 'fresh-token', expires_in: 604800, refresh_token: 'refresh-2' }));
+  }
+  const response = await pending;
+  assert.equal(response.headers.get('set-cookie'), null);
+  assert.equal((await response.json()).user, null);
 });
