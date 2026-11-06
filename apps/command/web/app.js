@@ -15,10 +15,71 @@ function esc(text) { return String(text).replace(/[&<>"']/g, c => ({ '&': '&amp;
 /** Discard the pending plan, hide its preview, and clear the confirmation and apply results. */
 function clearPlan() { plan = null; $('plan').hidden = true; $('confirmation').value = ''; $('result').innerHTML = ''; }
 /** Hide the audit report and remove its contents. */
+let sessionUser = null, lastAuditSummary = '';
 function clearAudit() {
   $('audit-report').hidden = true;
   $('audit-report').innerHTML = '';
+  lastAuditSummary = '';
 }
+const TAB_IDS = ['dashboard', 'bot-management', 'server-picker', 'audit-panel', 'template-setup', 'saved-structure-panel', 'server-notes', 'monetization', 'staff-panel'];
+/** Show only the requested workspace panel and mark its tab as selected. */
+function activateTab(name) {
+  for (const id of TAB_IDS) { const panel = $(id); if (panel) panel.hidden = id !== name; }
+  document.querySelectorAll('.section-tabs [data-tab]').forEach(button => {
+    const on = button.getAttribute('data-tab') === name;
+    button.setAttribute('aria-selected', on ? 'true' : 'false');
+    button.tabIndex = on ? 0 : -1;
+  });
+  if (name === 'dashboard') renderDashboard();
+}
+function dashCard(title, value, note) {
+  return `<div class="dash-card"><h3>${esc(title)}</h3><p class="dash-value">${esc(value)}</p>${note ? `<p class="dash-note">${esc(note)}</p>` : ''}</div>`;
+}
+/** Build the overview from live API data only; failures degrade to a note, never invented numbers. */
+async function renderDashboard() {
+  const grid = $('dashboard-cards');
+  if (!sessionUser) { grid.innerHTML = '<p class="report-empty">Sign in to see your command overview.</p>'; $('dashboard-quick').innerHTML = ''; return; }
+  grid.innerHTML = '<p class="report-empty">Loading overview\u2026</p>';
+  let bots = [];
+  try { const data = await api('/api/bots'); bots = [...data.bots]; if (data.sharedBot) bots.unshift(data.sharedBot); } catch { bots = []; }
+  const defaultBot = bots.find(bot => bot.id === $('active-bot').value);
+  let guilds = [];
+  try { guilds = (await api('/api/guilds')).guilds; } catch { guilds = []; }
+  let serverLine = 'No server selected', serverNote = 'Pick one on the Servers tab.';
+  if (selected) {
+    try {
+      const status = await api(`/api/guilds/${selected}/status`);
+      serverLine = `${status.channels} channels \u00b7 ${status.roles} roles`;
+      serverNote = 'Bot installed and ready on this server.';
+    } catch { serverLine = 'Bot not installed'; serverNote = 'Use the Servers tab install link, then reselect this server.'; }
+  }
+  const cards = [
+    dashCard('Signed in', sessionUser.username, 'Discord account connected'),
+    dashCard('Connected bots', String(bots.length), defaultBot ? `Default: ${defaultBot.username}` : 'No default bot chosen yet'),
+    dashCard('Manageable servers', String(guilds.length), selected ? 'Status of the selected server below' : 'Select one on the Servers tab'),
+    dashCard(selected ? 'Selected server' : 'Server status', serverLine, serverNote)
+  ];
+  if (lastAuditSummary) cards.push(dashCard('Last audit', lastAuditSummary, 'Re-run any time on the Audit tab.'));
+  grid.innerHTML = cards.join('');
+  $('dashboard-quick').innerHTML = [['audit-panel', 'Run audit'], ['template-setup', 'Set up a server'], ['bot-management', 'Manage bots'], ['server-picker', 'Switch server']]
+    .map(([tab, label]) => `<button type="button" class="dash-action" data-jump="${tab}">${esc(label)}</button>`).join('');
+  document.querySelectorAll('#dashboard-quick [data-jump]').forEach(button => {
+    button.addEventListener('click', () => activateTab(button.getAttribute('data-jump')));
+  });
+}
+const TIERS = [
+  { name: 'Crew', price: '$0', tag: 'For trying things out', features: ['1 Discord server', 'Core setup workspace', 'Read-only audit reports', 'Up to 20 saved structures'], commission: '30% marketplace commission', featured: false },
+  { name: 'Operator', price: '$4', tag: 'For growing communities', features: ['3 Discord servers', 'Everything in Crew', 'Structure version history', '10% marketplace commission'], commission: '', featured: false },
+  { name: 'Commander', price: '$7', tag: 'For serious server owners', features: ['5 Discord servers', 'Everything in Operator', 'Scheduled health checks', 'Priority feature requests', '5% marketplace commission'], commission: '', featured: true },
+  { name: 'Warlord', price: '$15', tag: 'Full command', features: ['10 Discord servers', 'Staff portal + moderation suite', 'Multi-server dashboard', '0% marketplace commission', 'Everything in Commander'], commission: '', featured: false }
+];
+/** Render the pricing tiers; buttons stay disabled until Stripe billing exists. */
+function renderMonetization() {
+  $('monetization-tiers').innerHTML = TIERS.map(tier => `<div class="tier${tier.featured ? ' tier-featured' : ''}"><h3>${esc(tier.name)}${tier.featured ? ' <span class="badge badge-ok">BEST VALUE</span>' : ''}</h3><p class="tier-price">${esc(tier.price)}<span>/month</span></p><p class="tier-tag">${esc(tier.tag)}</p><ul>${tier.features.map(feature => `<li>${esc(feature)}</li>`).join('')}</ul><button type="button" class="tier-btn" disabled title="Paid tiers activate at paid launch">${tier.price === '$0' ? 'Current plan' : `Get ${esc(tier.name)}`}</button>${tier.commission ? `<p class="tier-commission">${esc(tier.commission)}</p>` : ''}</div>`).join('');
+}
+document.querySelectorAll('.section-tabs [data-tab]').forEach(button => {
+  button.addEventListener('click', () => activateTab(button.getAttribute('data-tab')));
+});
 function controls(disabled) { document.querySelectorAll('button, select, input, textarea').forEach(el => { el.disabled = disabled; }); }
 async function run(action) {
   if (busy) return;
@@ -271,6 +332,7 @@ $('audit').onclick = () => run(async () => {
     <h3>Channels outside categories</h3>${uncatHtml}
     <p class="scope-note">${esc(audit.scopeNote)}</p>`;
   $('audit-report').hidden = false;
+  lastAuditSummary = `${audit.findings.length} findings \u00b7 ${audit.summary.roleCount} roles \u00b7 ${audit.summary.channelCount} channels`;
   message('Read-only audit complete. No Discord changes have been made.');
 });
 $('refresh').onclick = () => run(loadGuilds);
@@ -374,4 +436,7 @@ run(async () => {
   await refreshBots();
   $('template').add(new Option('Custom structure', 'custom'));
   await loadGuilds();
+  sessionUser = session.user;
+  renderMonetization();
+  activateTab('dashboard');
 });
