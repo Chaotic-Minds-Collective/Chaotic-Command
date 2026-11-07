@@ -1,0 +1,121 @@
+name: Deploy Discord Bot
+
+# Manual deployments only: no push triggers, no remote script downloads,
+# read-only repo permissions. Run from the Actions tab after secrets are set.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Validate Worker secrets
+        env:
+          SUPABASE_URL: ${{ secrets.BOT_SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.BOT_SUPABASE_SERVICE_KEY }}
+          DISCORD_BOT_TOKEN: ${{ secrets.BOT_DISCORD_TOKEN }}
+          DISCORD_PUBLIC_KEY: ${{ secrets.BOT_DISCORD_PUBLIC_KEY }}
+          DISCORD_APPLICATION_ID: ${{ secrets.BOT_DISCORD_APPLICATION_ID }}
+          REGISTER_SECRET: ${{ secrets.BOT_REGISTER_SECRET }}
+        run: |
+          for name in SUPABASE_URL SUPABASE_SERVICE_KEY DISCORD_BOT_TOKEN \
+            DISCORD_PUBLIC_KEY DISCORD_APPLICATION_ID REGISTER_SECRET
+          do
+            if [ -z "${!name}" ]; then
+              echo "::error::Repository secret for $name is unset or empty" >&2
+              exit 1
+            fi
+          done
+
+          node --input-type=module <<'NODE'
+          try {
+            const url = new URL(process.env.SUPABASE_URL);
+            if (url.protocol !== 'https:' || !url.hostname) throw new Error();
+          } catch {
+            console.error('::error::BOT_SUPABASE_URL must be a valid https:// URL');
+            process.exit(1);
+          }
+          NODE
+
+      - name: Resolve Cloudflare account id
+        run: |
+          RESPONSE=$(curl -fsS --max-time 30 -H "Authorization: Bearer ${{ secrets.CLOUDFLARE_API_TOKEN }}" \
+            https://api.cloudflare.com/client/v4/accounts)
+          ACCOUNT_ID=$(printf '%s' "$RESPONSE" | jq -er '
+            select(.success == true)
+            | .result
+            | select(type == "array" and length == 1)
+            | .[0].id
+            | select(type == "string" and length > 0)')
+          test -n "$ACCOUNT_ID" && test "$ACCOUNT_ID" != "null"
+          echo "ACCOUNT_ID=$ACCOUNT_ID" >> "$GITHUB_ENV"
+
+      - name: Deploy Worker
+        working-directory: apps/discord-bot
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ env.ACCOUNT_ID }}
+        run: |
+          set -o pipefail
+          npx --yes wrangler@4 deploy 2>&1 | tee deploy.log
+          URL=$(grep -oE 'https://[a-z0-9.-]+\.workers\.dev' deploy.log | head -1)
+          if [ -z "$URL" ]; then echo "workers.dev URL not found in deploy output" >&2; exit 1; fi
+          echo "WORKER_URL=$URL" >> "$GITHUB_ENV"
+
+      - name: Set Worker secrets
+        working-directory: apps/discord-bot
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ env.ACCOUNT_ID }}
+          SUPABASE_URL_VALUE: ${{ secrets.BOT_SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.BOT_SUPABASE_SERVICE_KEY }}
+          DISCORD_TOKEN: ${{ secrets.BOT_DISCORD_TOKEN }}
+          DISCORD_KEY: ${{ secrets.BOT_DISCORD_PUBLIC_KEY }}
+          DISCORD_APP: ${{ secrets.BOT_DISCORD_APPLICATION_ID }}
+          REG_SECRET: ${{ secrets.BOT_REGISTER_SECRET }}
+        run: |
+          for pair in \
+            "SUPABASE_URL:$SUPABASE_URL_VALUE" \
+            "SUPABASE_SERVICE_KEY:$SUPABASE_KEY" \
+            "DISCORD_BOT_TOKEN:$DISCORD_TOKEN" \
+            "DISCORD_PUBLIC_KEY:$DISCORD_KEY" \
+            "DISCORD_APPLICATION_ID:$DISCORD_APP" \
+            "REGISTER_SECRET:$REG_SECRET"
+          do
+            name="${pair%%:*}"
+            value="${pair#*:}"
+            printf '%s' "$value" | npx --yes wrangler@4 secret put "$name"
+          done
+
+      - name: Register slash commands
+        run: |
+          for attempt in $(seq 1 12); do
+            if curl -fsS --connect-timeout 5 --max-time 10 -X POST "$WORKER_URL/register" \
+              -H "X-Register-Secret: ${{ secrets.BOT_REGISTER_SECRET }}" -o register.json \
+              && jq -e '.registered | type == "array" and length > 0' register.json; then
+              cat register.json
+              exit 0
+            fi
+            echo "Registration attempt $attempt failed" >&2
+            if [ "$attempt" -lt 12 ]; then sleep 10; fi
+          done
+          echo "::error::Slash command registration failed after 12 attempts" >&2
+          exit 1
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Discord bot deployment"
+            echo "- Worker URL: $WORKER_URL"
+            echo "- Set the Discord interactions endpoint to: $WORKER_URL"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -14,6 +14,7 @@ export function createStore(env, fetcher = fetch) {
   async function request(method, path, body, extraHeaders = {}) {
     const response = await fetcher(`${base}${path}`, {
       method,
+      redirect: 'error',
       headers: { ...headers(), ...extraHeaders },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
