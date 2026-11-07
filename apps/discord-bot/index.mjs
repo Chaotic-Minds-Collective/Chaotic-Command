@@ -47,6 +47,8 @@ const status = {
 const intents = 1; // GUILDS: enough for the initial Gateway worker and slash-command lifecycle.
 let socket;
 let heartbeatTimer;
+let heartbeatAckTimer;
+let heartbeatPending = false;
 let reconnectTimer;
 let sequence = null;
 let sessionId = null;
@@ -54,9 +56,13 @@ let resumeGatewayUrl = null;
 let shuttingDown = false;
 let reconnectAttempt = 0;
 
+/** Cancel heartbeat, ACK watchdog, and reconnect timers and reset pending ACK state. */
 function clearTimers() {
   if (heartbeatTimer) clearInterval(heartbeatTimer);
   heartbeatTimer = undefined;
+  if (heartbeatAckTimer) clearTimeout(heartbeatAckTimer);
+  heartbeatAckTimer = undefined;
+  heartbeatPending = false;
   if (reconnectTimer) clearTimeout(reconnectTimer);
   reconnectTimer = undefined;
 }
@@ -67,8 +73,25 @@ function send(payload) {
   return true;
 }
 
+/** Send a heartbeat, reconnecting when the previous ACK is still pending or times out. */
 function heartbeat() {
-  send({ op: 1, d: sequence });
+  if (heartbeatPending) {
+    log('warn', 'Gateway heartbeat ACK missed; reconnecting');
+    if (status.state === 'ready') status.state = 'disconnected';
+    scheduleReconnect('heartbeat ACK timeout');
+    socket?.close(4000, 'heartbeat ACK timeout');
+    return;
+  }
+  if (!send({ op: 1, d: sequence })) return;
+  heartbeatPending = true;
+  const heartbeatSocket = socket;
+  heartbeatAckTimer = setTimeout(() => {
+    if (socket !== heartbeatSocket || !heartbeatPending) return;
+    log('warn', 'Gateway heartbeat ACK missed; reconnecting');
+    if (status.state === 'ready') status.state = 'disconnected';
+    scheduleReconnect('heartbeat ACK timeout');
+    heartbeatSocket.close(4000, 'heartbeat ACK timeout');
+  }, Number(status.heartbeatInterval || 45000));
 }
 
 async function discordRequest(path, options = {}) {
@@ -166,7 +189,7 @@ function handleDispatch(event, data) {
     status.state = 'ready';
     status.connectedSince = new Date().toISOString();
     status.lastReadyAt = status.connectedSince;
-    log('info', 'Gateway READY', { guilds: data.guilds?.length ?? 0, sessionId });
+    log('info', 'Gateway READY', { guilds: data.guilds?.length ?? 0 });
     return;
   }
 
@@ -197,13 +220,19 @@ function handleMessage(raw) {
       scheduleReconnect('invalid heartbeat interval');
       return;
     }
+    status.heartbeatInterval = interval;
     heartbeatTimer = setInterval(heartbeat, interval);
     if (sessionId && sequence !== null) resume();
     else identify();
     return;
   }
 
-  if (message.op === 11) return;
+  if (message.op === 11) {
+    heartbeatPending = false;
+    if (heartbeatAckTimer) clearTimeout(heartbeatAckTimer);
+    heartbeatAckTimer = undefined;
+    return;
+  }
   if (message.op === 1) {
     heartbeat();
     return;
@@ -230,7 +259,7 @@ function handleMessage(raw) {
   if (message.op === 0) handleDispatch(message.t, message.d);
 }
 
-/** Open a Gateway socket and attach message, error, and reconnect handlers. */
+/** Validate the saved resume URL before selecting the standard Gateway endpoint. */
 function gatewayUrl() {
   if (!resumeGatewayUrl) return DISCORD_GATEWAY;
   try {
@@ -244,14 +273,17 @@ function gatewayUrl() {
   }
 }
 
+/** Open a Gateway socket and attach message, error, and reconnect handlers. */
 function connect() {
   if (shuttingDown) return;
   clearTimers();
   const url = gatewayUrl();
   socket = new WebSocket(url);
+  const currentSocket = socket;
 
   socket.addEventListener('open', () => log('info', 'Gateway connection opened'));
   socket.addEventListener('message', (event) => {
+    if (socket !== currentSocket) return;
     try {
       handleMessage(String(event.data));
     } catch (error) {
@@ -265,7 +297,7 @@ function connect() {
     log('error', 'Gateway error', { error: String(event.error ?? event) });
   });
   socket.addEventListener('close', (event) => {
-    clearTimers();
+    if (socket !== currentSocket) return;
     if (event.code === 4007 || event.code === 4009) {
       sessionId = null;
       sequence = null;
