@@ -36,10 +36,15 @@ jobs:
             fi
           done
 
-          case "$SUPABASE_URL" in
-            https://*) ;;
-            *) echo "::error::BOT_SUPABASE_URL must start with https://" >&2; exit 1 ;;
-          esac
+          node --input-type=module <<'NODE'
+          try {
+            const url = new URL(process.env.SUPABASE_URL);
+            if (url.protocol !== 'https:' || !url.hostname) throw new Error();
+          } catch {
+            console.error('::error::BOT_SUPABASE_URL must be a valid https:// URL');
+            process.exit(1);
+          }
+          NODE
 
       - name: Resolve Cloudflare account id
         run: |
