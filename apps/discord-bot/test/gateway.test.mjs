@@ -82,6 +82,10 @@ async function fixture(t) {
       assert.equal(intervals.size, 1);
       intervals.values().next().value();
     },
+    expireHeartbeatAck() {
+      assert.equal(timeouts.size, 1);
+      timeouts.values().next().value();
+    },
   };
 }
 
@@ -116,6 +120,19 @@ test('resumable Invalid Session reconnects before resuming on Hello', async t =>
   const next = reconnect();
   assert.equal(next.url, resumeUrl);
   assert.deepEqual(next.sent, []);
+  next.message({ op: 10, d: { heartbeat_interval: 45000 } });
+  assert.deepEqual(next.sent, [{ op: 6, d: { token: 'test-token', session_id: 'session', seq: 42 } }]);
+});
+
+test('heartbeat ACK clears its watchdog, while a missed ACK reconnects and resumes', async t => {
+  const { first, heartbeat, expireHeartbeatAck, reconnect } = await fixture(t);
+  heartbeat();
+  assert.deepEqual(first.sent[1], { op: 1, d: 42 });
+  first.message({ op: 11, d: null });
+  heartbeat();
+  assert.deepEqual(first.sent[2], { op: 1, d: 42 });
+  expireHeartbeatAck();
+  const next = reconnect();
   next.message({ op: 10, d: { heartbeat_interval: 45000 } });
   assert.deepEqual(next.sent, [{ op: 6, d: { token: 'test-token', session_id: 'session', seq: 42 } }]);
 });

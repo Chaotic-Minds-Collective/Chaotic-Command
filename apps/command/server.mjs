@@ -289,17 +289,18 @@ export function createApp(config = {}) {
         try { identity = await discord('/users/@me', `Bot ${token}`); }
         catch { throw new HttpError(400, 'Discord could not verify this bot token. Check the Bot Token in your Discord Developer Portal.'); }
         if (!identity.bot || !identity.id || !identity.username) throw new HttpError(400, 'That token did not identify a Discord bot account.');
-        const count = db.prepare('SELECT COUNT(*) AS count FROM user_bots WHERE owner_id = ?').get(session.user.id).count;
-        if (count >= 5) throw new HttpError(409, 'You can connect up to five personal bots.');
         const id = randomBytes(16).toString('hex'), now = Date.now();
-        // Keep the credential and session selection atomic if the session was invalidated.
+        // Serialize the quota check, credential insert, and session selection.
         db.exec('BEGIN IMMEDIATE');
         try {
+          const count = db.prepare('SELECT COUNT(*) AS count FROM user_bots WHERE owner_id = ?').get(session.user.id).count;
+          if (count >= 5) throw new HttpError(409, 'You can connect up to five personal bots.');
           db.prepare('INSERT INTO user_bots (id, owner_id, discord_bot_id, username, token_encrypted, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(id, session.user.id, identity.id, identity.username, encrypt(token), now);
           persistChanges({ selectedBotId: id });
           db.exec('COMMIT');
         } catch (error) {
           db.exec('ROLLBACK');
+          if (error instanceof HttpError) throw error;
           if (String(error).includes('UNIQUE')) throw new HttpError(409, 'That Discord bot is already connected to your account.');
           throw error;
         }
@@ -362,15 +363,23 @@ export function createApp(config = {}) {
         const name = data.name.trim();
         if (!name || name.length > 60 || /[\u0000-\u001f\u007f]/.test(name)) throw new HttpError(400, 'Template name must contain 1 to 60 valid characters.');
         const structure = validateStructure(data.structure);
-        const count = db.prepare('SELECT COUNT(*) AS count FROM saved_structures WHERE owner_id = ?').get(session.user.id).count;
-        if (count >= 20) throw new HttpError(409, 'You can save up to 20 personal structures. Delete one before saving another.');
-        const nameKey = structureNameKey(name);
-        const existingNames = db.prepare('SELECT name FROM saved_structures WHERE owner_id = ?').all(session.user.id);
-        if (existingNames.some(row => structureNameKey(row.name) === nameKey)) {
-          throw new HttpError(409, 'You already have a saved structure with that name. Rename it or choose another name.');
-        }
         const id = randomBytes(16).toString('hex'), now = Date.now();
-        db.prepare('INSERT INTO saved_structures (id, owner_id, name, structure_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)').run(id, session.user.id, name, JSON.stringify(structure), now, now);
+        // Serialize quota/name checks with the insert so parallel requests cannot exceed limits.
+        db.exec('BEGIN IMMEDIATE');
+        try {
+          const count = db.prepare('SELECT COUNT(*) AS count FROM saved_structures WHERE owner_id = ?').get(session.user.id).count;
+          if (count >= 20) throw new HttpError(409, 'You can save up to 20 personal structures. Delete one before saving another.');
+          const nameKey = structureNameKey(name);
+          const existingNames = db.prepare('SELECT name FROM saved_structures WHERE owner_id = ?').all(session.user.id);
+          if (existingNames.some(row => structureNameKey(row.name) === nameKey)) throw new HttpError(409, 'You already have a saved structure with that name. Rename it or choose another name.');
+          db.prepare('INSERT INTO saved_structures (id, owner_id, name, structure_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)').run(id, session.user.id, name, JSON.stringify(structure), now, now);
+          db.exec('COMMIT');
+        } catch (error) {
+          db.exec('ROLLBACK');
+          if (error instanceof HttpError) throw error;
+          if (String(error).includes('UNIQUE')) throw new HttpError(409, 'You already have a saved structure with that name. Rename it or choose another name.');
+          throw error;
+        }
         return json(res, 201, { structure: { id, name, created_at: now, updated_at: now } });
       }
       const savedMatch = /^\/api\/structures\/([a-f0-9]{32})(?:\/(rename|delete))?$/.exec(path);

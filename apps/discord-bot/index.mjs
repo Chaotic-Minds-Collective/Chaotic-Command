@@ -47,6 +47,8 @@ const status = {
 const intents = 1; // GUILDS: enough for the initial Gateway worker and slash-command lifecycle.
 let socket;
 let heartbeatTimer;
+let heartbeatAckTimer;
+let heartbeatPending = false;
 let reconnectTimer;
 let sequence = null;
 let sessionId = null;
@@ -57,6 +59,9 @@ let reconnectAttempt = 0;
 function clearTimers() {
   if (heartbeatTimer) clearInterval(heartbeatTimer);
   heartbeatTimer = undefined;
+  if (heartbeatAckTimer) clearTimeout(heartbeatAckTimer);
+  heartbeatAckTimer = undefined;
+  heartbeatPending = false;
   if (reconnectTimer) clearTimeout(reconnectTimer);
   reconnectTimer = undefined;
 }
@@ -68,7 +73,21 @@ function send(payload) {
 }
 
 function heartbeat() {
-  send({ op: 1, d: sequence });
+  if (heartbeatPending) {
+    log('warn', 'Gateway heartbeat ACK missed; reconnecting');
+    scheduleReconnect('heartbeat ACK timeout');
+    socket?.close(4000, 'heartbeat ACK timeout');
+    return;
+  }
+  if (!send({ op: 1, d: sequence })) return;
+  heartbeatPending = true;
+  const heartbeatSocket = socket;
+  heartbeatAckTimer = setTimeout(() => {
+    if (socket !== heartbeatSocket || !heartbeatPending) return;
+    log('warn', 'Gateway heartbeat ACK missed; reconnecting');
+    scheduleReconnect('heartbeat ACK timeout');
+    heartbeatSocket.close(4000, 'heartbeat ACK timeout');
+  }, Number(status.heartbeatInterval || 45000));
 }
 
 async function discordRequest(path, options = {}) {
@@ -166,7 +185,7 @@ function handleDispatch(event, data) {
     status.state = 'ready';
     status.connectedSince = new Date().toISOString();
     status.lastReadyAt = status.connectedSince;
-    log('info', 'Gateway READY', { guilds: data.guilds?.length ?? 0, sessionId });
+    log('info', 'Gateway READY', { guilds: data.guilds?.length ?? 0 });
     return;
   }
 
@@ -197,13 +216,19 @@ function handleMessage(raw) {
       scheduleReconnect('invalid heartbeat interval');
       return;
     }
+    status.heartbeatInterval = interval;
     heartbeatTimer = setInterval(heartbeat, interval);
     if (sessionId && sequence !== null) resume();
     else identify();
     return;
   }
 
-  if (message.op === 11) return;
+  if (message.op === 11) {
+    heartbeatPending = false;
+    if (heartbeatAckTimer) clearTimeout(heartbeatAckTimer);
+    heartbeatAckTimer = undefined;
+    return;
+  }
   if (message.op === 1) {
     heartbeat();
     return;

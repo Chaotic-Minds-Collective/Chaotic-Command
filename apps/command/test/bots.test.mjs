@@ -266,3 +266,38 @@ test('an in-flight apply never switches bot credentials between writes', async t
   assert.equal(f.writes.length, 7);
   assert.ok(f.writes.every(write => write.auth === `Bot ${f.tokens[0]}`));
 });
+
+
+test('personal bot quota is rechecked inside the write transaction', async t => {
+  const mockDiscord = async (input, options = {}) => {
+    const url = new URL(input);
+    if (url.pathname === '/api/v10/oauth2/token' && options.method === 'POST') return json({ access_token: 'user-quota-owner', expires_in: 3600 });
+    if (url.pathname === '/api/v10/users/@me' && options.headers?.Authorization === 'Bearer user-quota-owner') return json({ id: '111111111111111111', username: 'quota-owner' });
+    if (url.pathname === '/api/v10/users/@me' && options.headers?.Authorization === 'Bot quota-attempt-token-value') return json({ id: '999999999999999991', username: 'quota-attempt', bot: true });
+    throw new Error('Unexpected Discord request: ' + url.pathname);
+  };
+  const { url, db } = await fixture(t, mockDiscord);
+  const auth = await signIn(url, 'quota-owner');
+  for (let i = 0; i < 5; i++) db.prepare('INSERT INTO user_bots (id, owner_id, discord_bot_id, username, token_encrypted, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(`seed-${i}`, '111111111111111111', `9876543210987654${String(i).padStart(2, '0')}`, `seed-${i}`, 'encrypted-placeholder', i);
+  const response = await fetch(`${url}/api/bots`, { method: 'POST', headers: headers(auth), body: JSON.stringify({ token: 'quota-attempt-token-value' }) });
+  assert.equal(response.status, 409);
+  assert.match((await response.json()).error, /up to five personal bots/i);
+  assert.equal(db.prepare('SELECT COUNT(*) AS count FROM user_bots WHERE owner_id = ?').get('111111111111111111').count, 5);
+});
+
+test('saved structure quota is rechecked inside the write transaction', async t => {
+  const mockDiscord = async (input, options = {}) => {
+    const url = new URL(input);
+    if (url.pathname === '/api/v10/oauth2/token' && options.method === 'POST') return json({ access_token: 'user-structure-quota', expires_in: 3600 });
+    if (url.pathname === '/api/v10/users/@me' && options.headers?.Authorization === 'Bearer user-structure-quota') return json({ id: '111111111111111111', username: 'quota-owner' });
+    throw new Error('Unexpected Discord request: ' + url.pathname);
+  };
+  const { url, db } = await fixture(t, mockDiscord);
+  const auth = await signIn(url, 'structure-quota');
+  const structure = { roles: [], categories: [{ name: 'General', channels: ['general'] }] };
+  for (let i = 0; i < 20; i++) db.prepare('INSERT INTO saved_structures (id, owner_id, name, structure_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)').run(String(i).padStart(32, '0'), '111111111111111111', `seed-${i}`, JSON.stringify(structure), i, i);
+  const response = await fetch(`${url}/api/structures`, { method: 'POST', headers: headers(auth), body: JSON.stringify({ name: 'quota-attempt', structure }) });
+  assert.equal(response.status, 409);
+  assert.match((await response.json()).error, /up to 20 personal structures/i);
+  assert.equal(db.prepare('SELECT COUNT(*) AS count FROM saved_structures WHERE owner_id = ?').get('111111111111111111').count, 20);
+});
