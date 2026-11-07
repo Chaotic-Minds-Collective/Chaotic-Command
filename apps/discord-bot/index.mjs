@@ -56,6 +56,7 @@ let resumeGatewayUrl = null;
 let shuttingDown = false;
 let reconnectAttempt = 0;
 
+/** Cancel heartbeat, ACK watchdog, and reconnect timers and reset pending ACK state. */
 function clearTimers() {
   if (heartbeatTimer) clearInterval(heartbeatTimer);
   heartbeatTimer = undefined;
@@ -72,9 +73,11 @@ function send(payload) {
   return true;
 }
 
+/** Send a heartbeat, reconnecting when the previous ACK is still pending or times out. */
 function heartbeat() {
   if (heartbeatPending) {
     log('warn', 'Gateway heartbeat ACK missed; reconnecting');
+    if (status.state === 'ready') status.state = 'disconnected';
     scheduleReconnect('heartbeat ACK timeout');
     socket?.close(4000, 'heartbeat ACK timeout');
     return;
@@ -85,6 +88,7 @@ function heartbeat() {
   heartbeatAckTimer = setTimeout(() => {
     if (socket !== heartbeatSocket || !heartbeatPending) return;
     log('warn', 'Gateway heartbeat ACK missed; reconnecting');
+    if (status.state === 'ready') status.state = 'disconnected';
     scheduleReconnect('heartbeat ACK timeout');
     heartbeatSocket.close(4000, 'heartbeat ACK timeout');
   }, Number(status.heartbeatInterval || 45000));
@@ -255,7 +259,7 @@ function handleMessage(raw) {
   if (message.op === 0) handleDispatch(message.t, message.d);
 }
 
-/** Open a Gateway socket and attach message, error, and reconnect handlers. */
+/** Validate the saved resume URL before selecting the standard Gateway endpoint. */
 function gatewayUrl() {
   if (!resumeGatewayUrl) return DISCORD_GATEWAY;
   try {
@@ -269,11 +273,13 @@ function gatewayUrl() {
   }
 }
 
+/** Open a Gateway socket and attach message, error, and reconnect handlers. */
 function connect() {
   if (shuttingDown) return;
   clearTimers();
   const url = gatewayUrl();
   socket = new WebSocket(url);
+  const currentSocket = socket;
 
   socket.addEventListener('open', () => log('info', 'Gateway connection opened'));
   socket.addEventListener('message', (event) => {
@@ -290,7 +296,7 @@ function connect() {
     log('error', 'Gateway error', { error: String(event.error ?? event) });
   });
   socket.addEventListener('close', (event) => {
-    clearTimers();
+    if (socket !== currentSocket) return;
     if (event.code === 4007 || event.code === 4009) {
       sessionId = null;
       sequence = null;
