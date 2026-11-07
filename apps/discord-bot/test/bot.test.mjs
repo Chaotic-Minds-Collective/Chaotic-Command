@@ -147,7 +147,7 @@ const commandPayload = (name, options = [], extra = {}) => ({
   ...extra,
 });
 
-const value = (custom_id, val) => ({ type: 18, components: [{ type: 4, custom_id, value: val }] });
+const value = (custom_id, val) => ({ type: 18, component: { type: 4, custom_id, value: val } });
 const selectValue = (custom_id, val) => ({ type: 3, custom_id, values: [val] });
 
 test('status endpoint and signature enforcement', async () => {
@@ -209,6 +209,19 @@ test('welcome message modal + save + test + enable', async () => {
   await send(app, commandPayload('welcome', [{ name: 'on' }]));
   config = mocks.tables.bot_guilds.get('100000000000000001').config;
   assert.equal(config.welcome.enabled, true);
+});
+
+test('legacy Action Row modal submission saves welcome configuration', async () => {
+  const mocks = makeMocks();
+  const app = createApp(makeEnv(), mocks.fetcher);
+  const response = await send(app, {
+    ...commandPayload('welcome'), type: 5,
+    data: { custom_id: 'cc_modal:welcome', components: [
+      { type: 1, components: [{ type: 4, custom_id: 'welcome_text', value: 'Legacy welcome' }] },
+    ] },
+  });
+  assert.ok(JSON.stringify(response.json).includes('Welcome message saved.'));
+  assert.equal(mocks.tables.bot_guilds.get('100000000000000001').config.welcome.message, 'Legacy welcome');
 });
 
 test('ticket panel, open modal, creation with overwrites, claim, close', async () => {
@@ -306,9 +319,14 @@ test('config and help render; unknown command handled', async () => {
 test('/register requires the secret and registers commands', async () => {
   const mocks = makeMocks();
   const app = createApp(makeEnv(), mocks.fetcher);
-  const bad = await send(app, {}, { secret: 'wrong', path: '/register' });
+  const bad = await send(app, {}, { sign: false, secret: 'wrong', path: '/register' });
   assert.equal(bad.status, 401);
-  const good = await send(app, {}, { secret: 'register-secret', path: '/register' });
+  const missing = await send(app, {}, { sign: false, path: '/register' });
+  assert.equal(missing.status, 401);
+  assert.equal(mocks.discord.commands, null);
+  const unconfigured = createApp({ ...makeEnv(), REGISTER_SECRET: undefined }, mocks.fetcher);
+  assert.equal((await send(unconfigured, {}, { sign: false, secret: 'register-secret', path: '/register' })).status, 401);
+  const good = await send(app, {}, { sign: false, secret: 'register-secret', path: '/register' });
   assert.deepEqual(good.json.registered, COMMANDS.map((c) => c.name));
   assert.equal(mocks.discord.commands.length, COMMANDS.length);
 });

@@ -28,12 +28,6 @@ export function createApp(env, fetcher = fetch) {
 
       if (request.method === 'GET') return json({ ok: true, app: 'chaotic-command-bot' });
 
-      const rawBody = await request.text();
-      if (!(await verifySignature(request, rawBody, env.DISCORD_PUBLIC_KEY))) {
-        return new Response('invalid signature', { status: 401 });
-      }
-      const body = JSON.parse(rawBody);
-
       // One-shot command registration: POST /register with the shared secret.
       if (url.pathname === '/register') {
         if (!env.REGISTER_SECRET || request.headers.get('X-Register-Secret') !== env.REGISTER_SECRET) {
@@ -42,6 +36,12 @@ export function createApp(env, fetcher = fetch) {
         const registered = await api('PUT', `/applications/${env.DISCORD_APPLICATION_ID}/commands`, COMMANDS);
         return json({ registered: registered.map((c) => c.name) });
       }
+
+      const rawBody = await request.text();
+      if (!(await verifySignature(request, rawBody, env.DISCORD_PUBLIC_KEY))) {
+        return new Response('invalid signature', { status: 401 });
+      }
+      const body = JSON.parse(rawBody);
 
       // Webhook events: outer payload has {version, application_id, type, event?}.
       // type 0 is the validation PING; type 1 wraps a real event.

@@ -408,7 +408,7 @@ export function createHandlers(env, api, store) {
     const customId = interaction.data.custom_id;
     const guildId = interaction.guild_id;
     const values = new Map(
-      (interaction.data.components ?? []).flatMap((field) => field.components.map((input) => [input.custom_id, input.value])),
+      (interaction.data.components ?? []).flatMap((field) => (field.component ? [field.component] : field.components ?? []).map((input) => [input.custom_id, input.value])),
     );
 
     if (customId === 'cc_modal:welcome') {
