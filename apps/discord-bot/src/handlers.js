@@ -5,6 +5,7 @@ import {
   container, textDisplay, separator, showModal, label, textInput, updateMessage, reply,
 } from './lib.js';
 
+/** Default per-guild configuration used when nothing is stored yet. */
 export const DEFAULT_CONFIG = () => ({
   welcome: { enabled: false, channel_id: null, message: 'Welcome {user} to **{server}**! Grab your roles and say hi.' },
   ticket_category_id: null,
@@ -22,7 +23,9 @@ const SETUP_FIELDS = {
   'cc_setup:announce_channel': ['announce_channel_id'],
 };
 
+/** Build the bot's interaction and webhook-event handlers over Discord REST and Supabase. */
 export function createHandlers(env, api, store) {
+  /** Load a guild's config, filling unset fields from DEFAULT_CONFIG. */
   async function getConfig(guildId) {
     const stored = await store.getConfig(guildId);
     const base = DEFAULT_CONFIG();
@@ -33,6 +36,7 @@ export function createHandlers(env, api, store) {
     };
   }
 
+  /** Load, mutate, and persist a guild's config in one step. */
   const withConfig = async (guildId, mutator) => {
     const config = await getConfig(guildId);
     mutator(config);
@@ -40,14 +44,17 @@ export function createHandlers(env, api, store) {
     return config;
   };
 
+  /** Persist a single config field addressed by its path array. */
   const setConfigField = (guildId, path, value) =>
     withConfig(guildId, (config) => {
       if (path.length === 2) config[path[0]][path[1]] = value;
       else config[path[0]] = value;
     });
 
+  /** Resolve a guild's name for message templates, with a fallback. */
   const guildName = async (guildId) => (await api('GET', `/guilds/${guildId}`))?.name ?? 'your server';
 
+  /** Post a moderation action summary to the configured mod-log channel. */
   const logMod = async (guildId, config, actorMention, line) => {
     if (!config.mod_log_channel_id) return;
     await api('POST', `/channels/${config.mod_log_channel_id}/messages`, {
@@ -56,6 +63,7 @@ export function createHandlers(env, api, store) {
     });
   };
 
+  /** Build the branded welcome card with {user}/{server} placeholders applied. */
   const welcomeCard = (config, serverName, userMention) => {
     const text = config.welcome.message
       .replaceAll('{user}', userMention)
@@ -65,6 +73,7 @@ export function createHandlers(env, api, store) {
 
   // --- /setup panel ---------------------------------------------------------
 
+  /** Render the /setup panel with one select per configurable field. */
   const renderSetup = (config) => [
     container(
       COLORS.ACCENT,
@@ -72,7 +81,7 @@ export function createHandlers(env, api, store) {
       separator(),
       actionRow(channelSelect('cc_setup:welcome_channel', config.welcome.channel_id ? `Welcome channel: <#${config.welcome.channel_id}>` : 'Welcome channel: not set', [0])),
       actionRow(channelSelect('cc_setup:ticket_category', config.ticket_category_id ? `Ticket category: <#${config.ticket_category_id}>` : 'Ticket category: not set', [4])),
-      actionRow(channelSelect('cc_setup:support_role', config.support_role_id ? `Support role: set` : 'Support role: not set')),
+      actionRow(roleSelect('cc_setup:support_role', config.support_role_id ? `Support role: set` : 'Support role: not set')),
       actionRow(channelSelect('cc_setup:mod_log', config.mod_log_channel_id ? `Mod log: <#${config.mod_log_channel_id}>` : 'Mod log: not set', [0])),
       actionRow(channelSelect('cc_setup:announce_channel', config.announce_channel_id ? `Announcement channel: <#${config.announce_channel_id}>` : 'Announcement channel: not set', [0])),
       separator(),
@@ -80,6 +89,7 @@ export function createHandlers(env, api, store) {
     ),
   ];
 
+  /** Reply with a warning when an interaction arrives outside a guild. */
   const requireGuild = (interaction) => {
     if (!interaction.member || !interaction.guild_id) {
       return reply([container(COLORS.WARN, textDisplay('This command only works inside a server.'))], EPHEMERAL_V2);
@@ -87,6 +97,7 @@ export function createHandlers(env, api, store) {
     return null;
   };
 
+  /** Reply with a warning unless the member has every named permission. */
   const requirePermissions = (interaction, ...names) => {
     if (!hasPermission(interaction.member?.permissions, ...names)) {
       return reply(
@@ -99,9 +110,9 @@ export function createHandlers(env, api, store) {
 
   // --- Commands -------------------------------------------------------------
 
+  /** Handle a slash-command interaction (type 2). */
   async function command(interaction) {
     const name = interaction.data.name;
-    const options = new Map((interaction.data.options ?? []).map((o) => [o.name, o]));
 
     if (name === 'setup') {
       const blocked = requireGuild(interaction) ?? requirePermissions(interaction, 'MANAGE_GUILD');
@@ -143,6 +154,7 @@ export function createHandlers(env, api, store) {
       if (blocked) return blocked;
       const guildId = interaction.guild_id;
       const sub = interaction.data.options?.[0]?.name;
+      const subOptions = new Map((interaction.data.options?.[0]?.options ?? []).map((o) => [o.name, o]));
 
       if (sub === 'panel') {
         await api('POST', `/channels/${interaction.channel_id}/messages`, {
@@ -159,12 +171,12 @@ export function createHandlers(env, api, store) {
         return reply([container(COLORS.SUCCESS, textDisplay('Ticket panel posted in this channel.'))], EPHEMERAL_V2);
       }
       if (sub === 'category') {
-        const categoryId = options.get('channel').value;
+        const categoryId = subOptions.get('channel').value;
         await setConfigField(guildId, ['ticket_category_id'], categoryId);
         return reply([container(COLORS.SUCCESS, textDisplay(`Ticket category set to <#${categoryId}>.`))], EPHEMERAL_V2);
       }
       if (sub === 'support') {
-        const roleId = options.get('role').value;
+        const roleId = subOptions.get('role').value;
         await setConfigField(guildId, ['support_role_id'], roleId);
         return reply([container(COLORS.SUCCESS, textDisplay(`Support role set to <@&${roleId}>.`))], EPHEMERAL_V2);
       }
@@ -209,7 +221,7 @@ export function createHandlers(env, api, store) {
         if (blocked) return blocked;
         const minutes = Number(subOptions.get('minutes'));
         const until = new Date(Date.now() + minutes * 60000).toISOString();
-        await api('PUT', `/guilds/${guildId}/members/${targetId}`, { communication_disabled_until: until });
+        await api('PATCH', `/guilds/${guildId}/members/${targetId}`, { communication_disabled_until: until });
         await logMod(guildId, config, actor, `**Timed out** <@${targetId}> for ${minutes}m - ${reason}`);
         return reply([container(COLORS.SUCCESS, textDisplay(`**Timed out** <@${targetId}> for ${minutes} minute(s).`))], EPHEMERAL_V2);
       }
@@ -286,6 +298,7 @@ export function createHandlers(env, api, store) {
 
   // --- Components -----------------------------------------------------------
 
+  /** Handle a component (button/select) interaction (type 3). */
   async function component(interaction) {
     const customId = interaction.data.custom_id;
     const guildId = interaction.guild_id;
@@ -404,6 +417,7 @@ export function createHandlers(env, api, store) {
 
   // --- Modals ---------------------------------------------------------------
 
+  /** Handle a modal submission (type 5) for welcome, announce, and tickets. */
   async function modal(interaction) {
     const customId = interaction.data.custom_id;
     const guildId = interaction.guild_id;
@@ -468,8 +482,9 @@ export function createHandlers(env, api, store) {
         parent_id: config.ticket_category_id,
         permission_overwrites: [
           { id: guildId, type: 0, deny: `${1 << 10}` },
+          { id: env.DISCORD_APPLICATION_ID, type: 1, allow: `${(1 << 10) | (1 << 11)}` },
           { id: userId, type: 1, allow: `${(1 << 10) | (1 << 11) | (1 << 14)}` },
-          ...(config.support_role_id ? [{ id: config.support_role_id, type: 1, allow: `${(1 << 10) | (1 << 11) | (1 << 14)}` }] : []),
+          ...(config.support_role_id ? [{ id: config.support_role_id, type: 0, allow: `${(1 << 10) | (1 << 11) | (1 << 14)}` }] : []),
         ],
       });
       const ticketId = crypto.randomUUID();
@@ -500,6 +515,7 @@ export function createHandlers(env, api, store) {
 
   // --- Webhook events -------------------------------------------------------
 
+  /** Handle application webhook events; DMs the installer on authorization. */
   async function webhookEvent(event) {
     if (event.type === 'APPLICATION_AUTHORIZED') {
       const user = event.data?.user;
