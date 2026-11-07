@@ -1,0 +1,8 @@
+{
+  "name": "chaotic-command-bot",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.mjs"
+  }
+}
