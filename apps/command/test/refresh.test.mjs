@@ -258,3 +258,63 @@ test('a delayed refresh does not replace the cookie from a newer sign-in', { tim
   assert.equal(response.headers.get('set-cookie'), null);
   assert.equal((await response.json()).user, null);
 });
+
+test('revisiting sign-in preserves the remaining session lifetime', async t => {
+  const mockDiscord = async (input, options = {}) => {
+    const url = new URL(input);
+    const method = options.method || 'GET';
+    if (url.pathname === '/api/v10/oauth2/token' && method === 'POST') {
+      const params = new URLSearchParams(options.body);
+      if (params.get('grant_type') === 'authorization_code') return json({ access_token: 'short-token', expires_in: 1200, refresh_token: 'refresh-1' });
+      return json({ error: 'invalid_grant' }, 400);
+    }
+    if (url.pathname === '/api/v10/users/@me') return json({ id: '444444444444444444', username: 'test-user', global_name: 'Test User' });
+    if (url.pathname === '/api/v10/users/@me/guilds') return json([{ id: '123456789012345678', name: 'Test Server', owner: true, permissions: '0' }]);
+    throw new Error(`Unexpected mocked Discord request: ${method} ${url.pathname}`);
+  };
+  const url = await fixture(t, mockDiscord);
+  const start = await fetch(`${url}/auth/discord`, { redirect: 'manual' });
+  const state = new URL(start.headers.get('location')).searchParams.get('state');
+  const callback = await fetch(`${url}/auth/callback?state=${state}&code=test-code`, { redirect: 'manual', headers: { Cookie: start.headers.get('set-cookie').split(';')[0] } });
+  const sessionCookie = callback.headers.get('set-cookie').split(';')[0];
+  const revisit = await fetch(`${url}/auth/discord`, { redirect: 'manual', headers: { Cookie: sessionCookie } });
+  assert.equal(revisit.status, 302);
+  const renewed = Number(/Max-Age=(\d+)/.exec(revisit.headers.get('set-cookie'))[1]);
+  assert.ok(renewed > 2591000 && renewed <= 2592000, `a signed-in revisit keeps the 30-day session instead of resetting to 8 hours (got ${renewed})`);
+});
+
+test('the refresh grant goes through the configured relay like sign-in does', async t => {
+  const grants = [];
+  const mockDiscord = async (input, options = {}) => {
+    const url = new URL(input);
+    const method = options.method || 'GET';
+    if (url.host === 'relay.example') {
+      assert.ok(options.headers['User-Agent'].startsWith('ChaoticCommand/'), 'the relay requires the branded user agent');
+      const params = new URLSearchParams(options.body);
+      grants.push(params.get('grant_type'));
+      if (params.get('grant_type') === 'refresh_token') return json({ access_token: 'fresh-token', expires_in: 604800, refresh_token: 'refresh-2' });
+      return json({ access_token: 'short-token', expires_in: 1200, refresh_token: 'refresh-1' });
+    }
+    if (url.pathname === '/api/v10/users/@me' && options.headers?.Authorization === 'Bearer short-token') return json({ id: '444444444444444444', username: 'test-user', global_name: 'Test User' });
+    if (url.pathname === '/api/v10/users/@me/guilds' && options.headers?.Authorization === 'Bearer fresh-token') return json([{ id: '123456789012345678', name: 'Test Server', owner: true, permissions: '0' }]);
+    throw new Error(`Unexpected direct request: ${method} ${url.host}${url.pathname}`);
+  };
+  const url = await fixture(t, mockDiscord, { env: {
+    APP_ORIGIN: 'http://localhost:3000',
+    DISCORD_CLIENT_ID: '123456789012345678',
+    DISCORD_CLIENT_SECRET: 'private-client-secret',
+    DISCORD_BOT_TOKEN: 'private-bot-token',
+    SESSION_SECRET: 'test-session-secret-at-least-32-characters',
+    DISCORD_TOKEN_PROXY: 'https://relay.example/functions/v1/discord-token-relay',
+    DISCORD_TOKEN_PROXY_KEY: 'anon-key'
+  } });
+  const start = await fetch(`${url}/auth/discord`, { redirect: 'manual' });
+  const state = new URL(start.headers.get('location')).searchParams.get('state');
+  const callback = await fetch(`${url}/auth/callback?state=${state}&code=test-code`, { redirect: 'manual', headers: { Cookie: start.headers.get('set-cookie').split(';')[0] } });
+  const cookie = callback.headers.get('set-cookie').split(';')[0];
+  const session = await fetch(`${url}/api/session`, { headers: { Cookie: cookie } });
+  assert.ok((await session.json()).user, 'sign-in through the relay works');
+  const guilds = await fetch(`${url}/api/guilds`, { headers: { Cookie: cookie } });
+  assert.equal(guilds.status, 200, 'the silently refreshed token works');
+  assert.deepEqual(grants, ['authorization_code', 'refresh_token'], 'both grants travel through the relay, never direct to Discord');
+});
