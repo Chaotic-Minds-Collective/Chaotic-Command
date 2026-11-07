@@ -99,7 +99,7 @@ function makeMocks() {
         discord.kicks.push({ guild: match[1], user: match[2] });
         return new Response(null, { status: 204 });
       }
-      if ((match = p.match(/^\/guilds\/(\d+)\/members\/(.+)$/)) && method === 'PUT') {
+      if ((match = p.match(/^\/guilds\/(\d+)\/members\/(.+)$/)) && method === 'PATCH') {
         discord.timeouts.push({ guild: match[1], user: match[2], ...body });
         return Response.json({ id: match[2], ...body });
       }
@@ -250,6 +250,8 @@ test('ticket panel, open modal, creation with overwrites, claim, close', async (
   const overwrites = JSON.stringify(created.permission_overwrites);
   assert.ok(overwrites.includes('100000000000000001'), 'everyone denied');
   assert.ok(overwrites.includes('500000000000000001'), 'support allowed');
+  assert.ok(created.permission_overwrites.some((o) => o.id === '500000000000000001' && o.type === 0), 'support overwrite is a role overwrite');
+  assert.ok(created.permission_overwrites.some((o) => o.id === env.DISCORD_APPLICATION_ID && o.type === 1), 'bot member overwrite present');
   const ticketRow = [...mocks.tables.bot_tickets.values()][0];
   assert.equal(ticketRow.status, 'open');
   assert.ok(JSON.stringify(ticketResponse.json.data.components).includes(created.id));
@@ -269,6 +271,20 @@ test('ticket panel, open modal, creation with overwrites, claim, close', async (
   assert.ok(mocks.discord.permissions.some((p) => p.target === ticketRow.user_id && p.deny === '2048'));
   assert.equal(mocks.tables.bot_tickets.get(ticketRow.id).status, 'closed');
   void env;
+});
+
+test('ticket category and support subcommands save nested option values', async () => {
+  const mocks = makeMocks();
+  const app = createApp(makeEnv(), mocks.fetcher);
+
+  const category = await send(app, commandPayload('ticket', [{ name: 'category', options: [{ name: 'channel', value: '400000000000000001' }] }]));
+  assert.ok(JSON.stringify(category.json.data.components).includes('Ticket category set'));
+  const support = await send(app, commandPayload('ticket', [{ name: 'support', options: [{ name: 'role', value: '500000000000000001' }] }]));
+  assert.ok(JSON.stringify(support.json.data.components).includes('Support role set'));
+
+  const config = mocks.tables.bot_guilds.get('100000000000000001').config;
+  assert.equal(config.ticket_category_id, '400000000000000001');
+  assert.equal(config.support_role_id, '500000000000000001');
 });
 
 test('moderation: permissions enforced, actions logged', async () => {
