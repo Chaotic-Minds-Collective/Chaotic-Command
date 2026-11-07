@@ -18,9 +18,27 @@ jobs:
         with:
           node-version: 24
 
+      - name: Validate Worker secrets
+        env:
+          SUPABASE_URL: ${{ secrets.BOT_SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.BOT_SUPABASE_SERVICE_KEY }}
+          DISCORD_BOT_TOKEN: ${{ secrets.BOT_DISCORD_TOKEN }}
+          DISCORD_PUBLIC_KEY: ${{ secrets.BOT_DISCORD_PUBLIC_KEY }}
+          DISCORD_APPLICATION_ID: ${{ secrets.BOT_DISCORD_APPLICATION_ID }}
+          REGISTER_SECRET: ${{ secrets.BOT_REGISTER_SECRET }}
+        run: |
+          for name in SUPABASE_URL SUPABASE_SERVICE_KEY DISCORD_BOT_TOKEN \
+            DISCORD_PUBLIC_KEY DISCORD_APPLICATION_ID REGISTER_SECRET
+          do
+            if [ -z "${!name}" ]; then
+              echo "::error::Repository secret for $name is unset or empty" >&2
+              exit 1
+            fi
+          done
+
       - name: Resolve Cloudflare account id
         run: |
-          RESPONSE=$(curl -fsS -H "Authorization: Bearer ${{ secrets.CLOUDFLARE_API_TOKEN }}" \
+          RESPONSE=$(curl -fsS --max-time 30 -H "Authorization: Bearer ${{ secrets.CLOUDFLARE_API_TOKEN }}" \
             https://api.cloudflare.com/client/v4/accounts)
           ACCOUNT_ID=$(printf '%s' "$RESPONSE" | jq -er '
             select(.success == true)
@@ -65,10 +83,6 @@ jobs:
           do
             name="${pair%%:*}"
             value="${pair#*:}"
-            if [ -z "$value" ]; then
-              echo "::error::Repository secret for $name is unset or empty" >&2
-              exit 1
-            fi
             printf '%s' "$value" | npx --yes wrangler@4 secret put "$name"
           done
 
