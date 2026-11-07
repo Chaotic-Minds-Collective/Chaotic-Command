@@ -36,6 +36,11 @@ jobs:
             fi
           done
 
+          case "$SUPABASE_URL" in
+            https://*) ;;
+            *) echo "::error::BOT_SUPABASE_URL must start with https://" >&2; exit 1 ;;
+          esac
+
       - name: Resolve Cloudflare account id
         run: |
           RESPONSE=$(curl -fsS --max-time 30 -H "Authorization: Bearer ${{ secrets.CLOUDFLARE_API_TOKEN }}" \
