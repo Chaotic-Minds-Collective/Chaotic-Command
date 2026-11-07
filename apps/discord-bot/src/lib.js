@@ -1,0 +1,113 @@
+// Chaotic Command bot - shared helpers: signature verification, component
+// builders (Components v2), and a thin Discord REST wrapper.
+
+export const FLAG_COMPONENTS_V2 = 1 << 15; // 32768 - enables v2 components
+export const FLAG_EPHEMERAL = 1 << 6; // 64 - only the invoking user sees it
+export const EPHEMERAL_V2 = FLAG_COMPONENTS_V2 | FLAG_EPHEMERAL;
+
+export const COLORS = {
+  ACCENT: 0x00e5cc, // electric turquoise
+  DANGER: 0xed4245,
+  SUCCESS: 0x57f287,
+  WARN: 0xfee75c,
+};
+
+export const PERMISSIONS = {
+  KICK_MEMBERS: 1n << 1n,
+  BAN_MEMBERS: 1n << 2n,
+  MANAGE_CHANNELS: 1n << 4n,
+  MANAGE_GUILD: 1n << 5n,
+  MANAGE_MESSAGES: 1n << 13n,
+  MANAGE_ROLES: 1n << 28n,
+  MODERATE_MEMBERS: 1n << 40n,
+};
+
+/** True when the interaction member has every named permission. */
+export function hasPermission(bits, ...names) {
+  let value;
+  try {
+    value = BigInt(bits ?? 0);
+  } catch {
+    return false;
+  }
+  return names.every((name) => (value & PERMISSIONS[name]) === PERMISSIONS[name]);
+}
+
+export function hexToBytes(hex) {
+  const clean = hex.length % 2 ? `0${hex}` : hex;
+  const bytes = new Uint8Array(clean.length / 2);
+  for (let i = 0; i < bytes.length; i++) bytes[i] = Number.parseInt(clean.slice(i * 2, i * 2 + 2), 16);
+  return bytes;
+}
+
+/** Verify an interaction or webhook-event request came from Discord. */
+export async function verifySignature(request, rawBody, publicKeyHex) {
+  const signature = request.headers.get('X-Signature-Ed25519') ?? '';
+  const timestamp = request.headers.get('X-Signature-Timestamp') ?? '';
+  if (!signature || !timestamp || !publicKeyHex) return false;
+  try {
+    const payload = new TextEncoder().encode(timestamp + rawBody);
+    const key = await crypto.subtle.importKey('raw', hexToBytes(publicKeyHex), { name: 'Ed25519' }, false, ['verify']);
+    return crypto.subtle.verify('Ed25519', key, hexToBytes(signature), payload);
+  } catch {
+    return false;
+  }
+}
+
+// --- Components v2 builders -------------------------------------------------
+
+export const textDisplay = (content) => ({ type: 10, content });
+export const separator = () => ({ type: 14, divider: true, spacing: 1 });
+export const actionRow = (...components) => ({ type: 1, components });
+export const button = ({ custom_id, label, style = 1, disabled = false }) => ({ type: 2, style, label, custom_id, disabled });
+export const channelSelect = (custom_id, placeholder, channel_types = [0]) => ({ type: 8, custom_id, placeholder, channel_types });
+export const roleSelect = (custom_id, placeholder) => ({ type: 6, custom_id, placeholder });
+export const container = (accent_color, ...components) => ({ type: 17, accent_color, components });
+export const section = (content, accessory) => ({ type: 9, components: [textDisplay(content)], accessory });
+export const thumbnail = (url) => ({ type: 11, media: { url } });
+
+// Modal builders (Label wraps inputs; Text Input inside Action Rows is deprecated)
+export const label = (text, component, description) => ({ type: 18, label: text, component, ...(description ? { description } : {}) });
+export const textInput = ({ custom_id, style = 1, required = true, min_length = 1, max_length = 100, placeholder }) => ({
+  type: 4, custom_id, style, required, min_length, max_length, ...(placeholder ? { placeholder } : {}),
+});
+
+// --- Discord REST -----------------------------------------------------------
+
+export const DISCORD_API = 'https://discord.com/api/v10';
+
+export function createApi(token, fetcher = fetch) {
+  return async function api(method, path, body) {
+    const response = await fetcher(`${DISCORD_API}${path}`, {
+      method,
+      headers: { Authorization: `Bot ${token}`, 'Content-Type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    const text = await response.text();
+    let data = null;
+    if (text) {
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = text;
+      }
+    }
+    if (!response.ok) {
+      const error = new Error(`Discord ${method} ${path} -> ${response.status}`);
+      error.status = response.status;
+      error.data = data;
+      throw error;
+    }
+    return data;
+  };
+}
+
+// --- Interaction response shapes -------------------------------------------
+
+export const interactionResponse = (payload) => new Response(JSON.stringify(payload), { headers: { 'Content-Type': 'application/json' } });
+export const pong = () => interactionResponse({ type: 1 });
+export const reply = (components, flags = FLAG_COMPONENTS_V2) => interactionResponse({ type: 4, data: { flags, components } });
+export const updateMessage = (components, flags = FLAG_COMPONENTS_V2) => interactionResponse({ type: 7, data: { flags, components } });
+export const showModal = (custom_id, title, components) => interactionResponse({ type: 9, data: { custom_id, title, components } });
+export const noContent = () => new Response(null, { status: 204 });
+export const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
