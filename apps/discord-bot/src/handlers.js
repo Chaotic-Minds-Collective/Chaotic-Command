@@ -518,6 +518,7 @@ export function createHandlers(env, api, store) {
           ]);
           const failures = cleanup.filter((result) => result.status === 'rejected');
           if (failures.length) {
+            console.error('Ticket cleanup failed', { ticketId, channelId: channel.id });
             throw new AggregateError([error, ...failures.map((result) => result.reason)], 'Ticket creation and cleanup failed');
           }
         }

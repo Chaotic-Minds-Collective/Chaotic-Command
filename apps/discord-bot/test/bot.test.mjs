@@ -279,7 +279,8 @@ test('ticket panel, open modal, creation with overwrites, claim, close', async (
 
 test('ticket creation compensates failed Discord and database steps', async (t) => {
   for (const failure of ['channel', 'insert-http', 'insert-network', 'message', 'channel-cleanup', 'row-cleanup']) {
-    await t.test(failure, async () => {
+    await t.test(failure, async (t) => {
+      const errorLog = t.mock.method(console, 'error', () => {});
       const mocks = makeMocks();
       const guildId = commandPayload('ticket').guild_id;
       mocks.tables.bot_guilds.set(guildId, { guild_id: guildId, config: { ticket_category_id: '400000000000000001' } });
@@ -310,6 +311,16 @@ test('ticket creation compensates failed Discord and database steps', async (t) 
         data: { custom_id: 'cc_modal:ticket', components: [value('ticket_subject', 'Help'), value('ticket_details', 'Details')] },
       });
       assert.ok(JSON.stringify(response.json).includes('Something went wrong'));
+      if (failure.endsWith('-cleanup')) {
+        const context = errorLog.mock.calls.find((call) => call.arguments[0] === 'Ticket cleanup failed')?.arguments[1];
+        assert.ok(context?.ticketId);
+        assert.equal(context.channelId, 'ch-1');
+        if (failure === 'row-cleanup') assert.ok(mocks.tables.bot_tickets.has(context.ticketId));
+        const errors = errorLog.mock.calls.find((call) => call.arguments[0] === 'interaction failed: Ticket creation and cleanup failed')?.arguments[1];
+        assert.equal(errors?.length, 2);
+        assert.match(errors[0].message, /POST .*messages/);
+        assert.match(errors[1].message, failure === 'channel-cleanup' ? /DELETE .*channels/ : /Ticket cleanup failed: HTTP 500/);
+      }
       assert.equal(mocks.discord.channels.size, failure === 'channel-cleanup' ? 1 : 0);
       assert.equal(mocks.tables.bot_tickets.size, failure === 'row-cleanup' ? 1 : 0);
       if (failure !== 'channel') {

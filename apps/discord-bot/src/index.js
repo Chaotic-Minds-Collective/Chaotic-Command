@@ -61,7 +61,7 @@ export function createApp(env, fetcher = fetch) {
       try {
         return await dispatchInteraction(body);
       } catch (error) {
-        console.error(`interaction failed: ${error.message}`);
+        console.error(`interaction failed: ${error.message}`, error.errors ?? '');
         return reply(
           [container(COLORS.DANGER, textDisplay('## Something went wrong'))],
           EPHEMERAL_V2,
