@@ -210,3 +210,34 @@ test('late close from a replaced socket preserves replacement timers and session
   third.message({ op: 10, d: { heartbeat_interval: 45000 } });
   assert.deepEqual(third.sent, [{ op: 6, d: { token: 'test-token', session_id: 'session', seq: 43 } }]);
 });
+
+for (const op of [1, 11]) {
+  test(`opcode ${op} from a superseded socket cannot affect the current heartbeat`, async t => {
+    const f = await fixture(t);
+    f.first.message({ op: 10, d: { heartbeat_interval: 0 } });
+    const next = f.reconnect();
+    assert.equal(f.first.readyState, WebSocket.OPEN);
+    next.message({ op: 10, d: { heartbeat_interval: 45000 } });
+    next.message({ op: 0, t: 'RESUMED', s: 43, d: {} });
+    f.heartbeat();
+    const timers = [...f.timeouts.keys()];
+    const intervals = [...f.intervals.keys()];
+    const sent = [...next.sent];
+    f.first.message({ op, d: null });
+    assert.deepEqual([...f.timeouts.keys()], timers);
+    assert.deepEqual([...f.intervals.keys()], intervals);
+    assert.deepEqual(next.sent, sent);
+    assert.equal(next.readyState, WebSocket.OPEN);
+    assert.equal(f.health().code, 200);
+    assert.equal(f.health().reconnectAttempts, 1);
+    // Current-socket ACKs still clear the watchdog and heartbeat requests still send.
+    next.message({ op: 11, d: null });
+    assert.equal(f.timeouts.size, 0);
+    next.message({ op: 1, d: null });
+    assert.deepEqual(next.sent.at(-1), { op: 1, d: 43 });
+    assert.equal(f.timeouts.size, 1);
+    f.expireHeartbeatAck();
+    assert.equal(f.health().code, 503);
+    f.reconnect(3);
+  });
+}

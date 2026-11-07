@@ -283,6 +283,7 @@ function connect() {
 
   socket.addEventListener('open', () => log('info', 'Gateway connection opened'));
   socket.addEventListener('message', (event) => {
+    if (socket !== currentSocket) return;
     try {
       handleMessage(String(event.data));
     } catch (error) {
