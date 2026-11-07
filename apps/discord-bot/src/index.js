@@ -9,11 +9,13 @@ import { COMMANDS } from './commands.js';
 import { createStore } from './store.js';
 import { createHandlers } from './handlers.js';
 
+/** Build the Worker fetch handler: signature checks, /register, interactions, webhook events. */
 export function createApp(env, fetcher = fetch) {
   const api = createApi(env.DISCORD_BOT_TOKEN, fetcher);
   const store = createStore(env, fetcher);
   const handlers = createHandlers(env, api, store);
 
+  /** Route a verified interaction payload to its type-specific handler. */
   async function dispatchInteraction(body) {
     if (body.type === 1) return pong();
     if (body.type === 2) return handlers.command(body);
@@ -23,7 +25,7 @@ export function createApp(env, fetcher = fetch) {
   }
 
   return {
-    async fetch(request) {
+    async fetch(request, ctx = null) {
       const url = new URL(request.url);
 
       if (request.method === 'GET') return json({ ok: true, app: 'chaotic-command-bot' });
@@ -47,11 +49,11 @@ export function createApp(env, fetcher = fetch) {
       // type 0 is the validation PING; type 1 wraps a real event.
       if (body.type === 0 && !body.token) return noContent();
       if (body.event) {
-        try {
-          await handlers.webhookEvent(body.event);
-        } catch (error) {
+        const work = handlers.webhookEvent(body.event).catch((error) => {
           console.error(`webhook event ${body.event.type} failed: ${error.message}`);
-        }
+        });
+        if (ctx?.waitUntil) ctx.waitUntil(work);
+        else await work;
         return noContent();
       }
 
@@ -61,7 +63,7 @@ export function createApp(env, fetcher = fetch) {
       } catch (error) {
         console.error(`interaction failed: ${error.message}`);
         return reply(
-          [container(COLORS.DANGER, textDisplay(`## Something went wrong\n${error.message}`))],
+          [container(COLORS.DANGER, textDisplay('## Something went wrong'))],
           EPHEMERAL_V2,
         );
       }
@@ -70,5 +72,5 @@ export function createApp(env, fetcher = fetch) {
 }
 
 export default {
-  fetch: (request, env) => createApp(env, fetch).fetch(request),
+  fetch: (request, env, ctx) => createApp(env, fetch).fetch(request, ctx),
 };
