@@ -476,37 +476,53 @@ export function createHandlers(env, api, store) {
       }
       const userId = interaction.member.user.id;
       const number = String((await store.countTickets(guildId)) + 1).padStart(4, '0');
-      const channel = await api('POST', `/guilds/${guildId}/channels`, {
-        name: `ticket-${number}`,
-        type: 0,
-        parent_id: config.ticket_category_id,
-        permission_overwrites: [
-          { id: guildId, type: 0, deny: `${1 << 10}` },
-          { id: env.DISCORD_APPLICATION_ID, type: 1, allow: `${(1 << 10) | (1 << 11)}` },
-          { id: userId, type: 1, allow: `${(1 << 10) | (1 << 11) | (1 << 14)}` },
-          ...(config.support_role_id ? [{ id: config.support_role_id, type: 0, allow: `${(1 << 10) | (1 << 11) | (1 << 14)}` }] : []),
-        ],
-      });
       const ticketId = crypto.randomUUID();
-      const subject = values.get('ticket_subject');
-      await store.createTicket({
-        id: ticketId, guild_id: guildId, channel_id: channel.id, user_id: userId,
-        subject, status: 'open', claimed_by: null,
-      });
-      await api('POST', `/channels/${channel.id}/messages`, {
-        flags: 32768,
-        components: [
-          container(
-            COLORS.ACCENT,
-            textDisplay(`# ${subject}\n${values.get('ticket_details')}\n-# Opened by <@${userId}>`),
-            separator(),
-            actionRow(
-              button({ custom_id: `cc_ticket:claim:${ticketId}`, label: 'Claim', style: 1 }),
-              button({ custom_id: `cc_ticket:close:${ticketId}`, label: 'Close', style: 4 }),
+      let channel;
+      try {
+        channel = await api('POST', `/guilds/${guildId}/channels`, {
+          name: `ticket-${number}`,
+          type: 0,
+          parent_id: config.ticket_category_id,
+          permission_overwrites: [
+            { id: guildId, type: 0, deny: `${1 << 10}` },
+            { id: env.DISCORD_APPLICATION_ID, type: 1, allow: `${(1 << 10) | (1 << 11)}` },
+            { id: userId, type: 1, allow: `${(1 << 10) | (1 << 11) | (1 << 14)}` },
+            ...(config.support_role_id ? [{ id: config.support_role_id, type: 0, allow: `${(1 << 10) | (1 << 11) | (1 << 14)}` }] : []),
+          ],
+        });
+        const subject = values.get('ticket_subject');
+        await store.createTicket({
+          id: ticketId, guild_id: guildId, channel_id: channel.id, user_id: userId,
+          subject, status: 'open', claimed_by: null,
+        });
+        await api('POST', `/channels/${channel.id}/messages`, {
+          flags: 32768,
+          components: [
+            container(
+              COLORS.ACCENT,
+              textDisplay(`# ${subject}\n${values.get('ticket_details')}\n-# Opened by <@${userId}>`),
+              separator(),
+              actionRow(
+                button({ custom_id: `cc_ticket:claim:${ticketId}`, label: 'Claim', style: 1 }),
+                button({ custom_id: `cc_ticket:close:${ticketId}`, label: 'Close', style: 4 }),
+              ),
             ),
-          ),
-        ],
-      });
+          ],
+        });
+      } catch (error) {
+        if (channel) {
+          // Attempt both compensations even if one provider is unavailable.
+          const cleanup = await Promise.allSettled([
+            api('DELETE', `/channels/${channel.id}`),
+            store.deleteTicket(ticketId),
+          ]);
+          const failures = cleanup.filter((result) => result.status === 'rejected');
+          if (failures.length) {
+            throw new AggregateError([error, ...failures.map((result) => result.reason)], 'Ticket creation and cleanup failed');
+          }
+        }
+        throw error;
+      }
       return reply([container(COLORS.SUCCESS, textDisplay(`Ticket created: <#${channel.id}>`))], EPHEMERAL_V2);
     }
 

@@ -87,6 +87,10 @@ function makeMocks() {
         discord.permissions.push({ channel: match[1], target: match[2], ...body });
         return new Response(null, { status: 204 });
       }
+      if ((match = p.match(/^\/channels\/([^/]+)$/)) && method === 'DELETE') {
+        discord.channels.delete(match[1]);
+        return new Response(null, { status: 204 });
+      }
       if ((match = p.match(/^\/channels\/([^/]+)$/)) && method === 'PATCH') {
         return Response.json({ id: match[1], ...body });
       }
@@ -271,6 +275,51 @@ test('ticket panel, open modal, creation with overwrites, claim, close', async (
   assert.ok(mocks.discord.permissions.some((p) => p.target === ticketRow.user_id && p.deny === '2048'));
   assert.equal(mocks.tables.bot_tickets.get(ticketRow.id).status, 'closed');
   void env;
+});
+
+test('ticket creation compensates failed Discord and database steps', async (t) => {
+  for (const failure of ['channel', 'insert-http', 'insert-network', 'message', 'channel-cleanup', 'row-cleanup']) {
+    await t.test(failure, async () => {
+      const mocks = makeMocks();
+      const guildId = commandPayload('ticket').guild_id;
+      mocks.tables.bot_guilds.set(guildId, { guild_id: guildId, config: { ticket_category_id: '400000000000000001' } });
+      const attempted = [];
+      const fetcher = async (input, init = {}) => {
+        const url = new URL(String(input));
+        attempted.push(`${init.method} ${url.pathname}`);
+        if (failure === 'channel' && init.method === 'POST' && url.pathname.endsWith('/channels')) {
+          return new Response('{}', { status: 500 });
+        }
+        if (init.method === 'POST' && url.pathname.endsWith('/bot_tickets')) {
+          if (failure === 'insert-http') return new Response('{}', { status: 500 });
+          if (failure === 'insert-network') {
+            await mocks.fetcher(input, init); // The write committed before the connection failed.
+            throw new Error('connection lost');
+          }
+        }
+        if (init.method === 'POST' && url.pathname.endsWith('/messages') && ['message', 'channel-cleanup', 'row-cleanup'].includes(failure)) {
+          return new Response('{}', { status: 500 });
+        }
+        if (init.method === 'DELETE' && ((failure === 'channel-cleanup' && url.host === 'discord.com') || (failure === 'row-cleanup' && url.host === 'unittest.supabase.co'))) {
+          return new Response('{}', { status: 500 });
+        }
+        return mocks.fetcher(input, init);
+      };
+      const response = await send(createApp(makeEnv(), fetcher), {
+        ...commandPayload('ticket'), type: 5,
+        data: { custom_id: 'cc_modal:ticket', components: [value('ticket_subject', 'Help'), value('ticket_details', 'Details')] },
+      });
+      assert.ok(JSON.stringify(response.json).includes('Something went wrong'));
+      assert.equal(mocks.discord.channels.size, failure === 'channel-cleanup' ? 1 : 0);
+      assert.equal(mocks.tables.bot_tickets.size, failure === 'row-cleanup' ? 1 : 0);
+      if (failure !== 'channel') {
+        assert.ok(attempted.includes('DELETE /api/v10/channels/ch-1'));
+        assert.ok(attempted.includes('DELETE /rest/v1/bot_tickets'));
+      } else {
+        assert.ok(!attempted.some((call) => call.startsWith('DELETE')));
+      }
+    });
+  }
 });
 
 test('ticket category and support subcommands save nested option values', async () => {

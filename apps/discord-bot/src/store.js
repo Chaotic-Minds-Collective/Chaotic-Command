@@ -40,7 +40,18 @@ export function createStore(env, fetcher = fetch) {
     request('POST', '/rest/v1/bot_guilds', { guild_id: guildId, config }, { Prefer: 'resolution=merge-duplicates' });
 
   /** Insert a new ticket row. */
-  const createTicket = (row) => request('POST', '/rest/v1/bot_tickets', row);
+  const createTicket = async (row) => {
+    const result = await request('POST', '/rest/v1/bot_tickets', row);
+    if (result.status >= 400) throw new Error(`Ticket insert failed: HTTP ${result.status}`);
+    return result;
+  };
+
+  /** Remove a ticket row when creation cannot finish. */
+  const deleteTicket = async (ticketId) => {
+    const result = await request('DELETE', `/rest/v1/bot_tickets?id=eq.${ticketId}`);
+    if (result.status >= 400) throw new Error(`Ticket cleanup failed: HTTP ${result.status}`);
+    return result;
+  };
 
   /** Read one ticket by id, or null when missing. */
   const getTicket = async (ticketId) => {
@@ -64,5 +75,5 @@ export function createStore(env, fetcher = fetch) {
   /** Delete a pending draft after posting or discarding it. */
   const deletePending = (id) => request('DELETE', `/rest/v1/bot_pending?id=eq.${id}`);
 
-  return { getConfig, saveConfig, createTicket, getTicket, updateTicket, countTickets, savePending, getPending, deletePending };
+  return { getConfig, saveConfig, createTicket, deleteTicket, getTicket, updateTicket, countTickets, savePending, getPending, deletePending };
 }
