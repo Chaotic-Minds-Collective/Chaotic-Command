@@ -49,7 +49,7 @@ export function createStore(env, fetcher = fetch) {
   };
 
   /** Patch a ticket row's mutable fields. */
-  const updateTicket = (ticketId, patch) => request('PATCH', '/rest/v1/bot_tickets?id=eq.${ticketId}', patch);
+  const updateTicket = (ticketId, patch) => request('PATCH', `/rest/v1/bot_tickets?id=eq.${ticketId}`, patch);
 
   /** Count a guild's tickets, used for sequential channel numbering. */
   const countTickets = async (guildId) => {
@@ -62,7 +62,7 @@ export function createStore(env, fetcher = fetch) {
   /** Read a pending draft's payload, or null when expired or missing. */
   const getPending = async (id) => (await request('GET', `/rest/v1/bot_pending?id=eq.${id}&select=payload&limit=1`)).data?.[0]?.payload ?? null;
   /** Delete a pending draft after posting or discarding it. */
-  const deletePending = (id) => request('DELETE', '/rest/v1/bot_pending?id=eq.${id}');
+  const deletePending = (id) => request('DELETE', `/rest/v1/bot_pending?id=eq.${id}`);
 
   return { getConfig, saveConfig, createTicket, getTicket, updateTicket, countTickets, savePending, getPending, deletePending };
 }
